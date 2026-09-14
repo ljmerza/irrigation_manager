@@ -32,6 +32,7 @@ from .const import (
     CONF_FORECAST_PROBABILITY,
     CONF_FREQUENCY,
     CONF_INTERVAL_DAYS,
+    CONF_INTERVAL_HOURS,
     CONF_MOISTURE_MODE,
     CONF_MOISTURE_SENSORS,
     CONF_MOISTURE_THRESHOLD,
@@ -49,15 +50,21 @@ from .const import (
     CONF_WEATHER_ENTITY,
     CONF_WEEKDAYS,
     CONF_WIND_MAX,
+    CONF_WINDOW_END,
+    CONF_WINDOW_START,
     CONF_ZONE_ENTITY,
     CONF_ZONE_MINUTES,
     CONF_ZONE_MODE,
     CONF_ZONES,
+    DEFAULT_WINDOW_END,
+    DEFAULT_WINDOW_START,
     DOMAIN,
     MAX_INTERVAL_DAYS,
+    MAX_INTERVAL_HOURS,
     MAX_SUN_OFFSET,
     MAX_ZONE_MINUTES,
     MIN_INTERVAL_DAYS,
+    MIN_INTERVAL_HOURS,
     MIN_SUN_OFFSET,
     MIN_ZONE_MINUTES,
     MoistureMode,
@@ -108,7 +115,9 @@ PARSE_INSTRUCTIONS: Final = (
     "fill fields the description states or clearly implies; leave the rest empty. "
     "Use entity ids exactly as listed in the candidate entities. Weekdays are "
     "numbers, 0 = Monday through 6 = Sunday. For sunrise or sunset starts, "
-    "sun_offset_minutes is how many minutes before the event watering finishes."
+    "sun_offset_minutes is how many minutes before the event watering finishes. "
+    "For every N hours between two times each day, use frequency hourly with "
+    "interval_hours, window_start and window_end, and start_mode time."
 )
 LAWN_PROMPT: Final = (
     "This is a photo of a yard. Describe visible signs of under-watering (brown or "
@@ -542,6 +551,9 @@ def validate_partial_config(
         CONF_INTERVAL_DAYS: lambda value: _int_in(value, MIN_INTERVAL_DAYS, MAX_INTERVAL_DAYS),
         CONF_ANCHOR: lambda value: date.fromisoformat(str(value)).isoformat(),
         CONF_WEEKDAYS: _valid_weekdays,
+        CONF_INTERVAL_HOURS: lambda value: _int_in(value, MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS),
+        CONF_WINDOW_START: _valid_clock,
+        CONF_WINDOW_END: _valid_clock,
         CONF_START_MODE: lambda value: StartMode(value).value,
         CONF_START_TIME: lambda value: time.fromisoformat(str(value)).strftime("%H:%M:%S"),
         CONF_SUN_OFFSET: lambda value: _int_in(value, MIN_SUN_OFFSET, MAX_SUN_OFFSET),
@@ -596,10 +608,16 @@ def _drop_unused_keys(config: dict[str, Any], warnings: list[str]) -> None:
     """Remove keys the chosen frequency, start mode or conditions don't use."""
     unused: list[str] = []
     frequency = config.get(CONF_FREQUENCY)
+    hourly_keys = [CONF_INTERVAL_HOURS, CONF_WINDOW_START, CONF_WINDOW_END]
     if frequency == Frequency.INTERVAL:
-        unused.append(CONF_WEEKDAYS)
+        unused += [CONF_WEEKDAYS, *hourly_keys]
     elif frequency == Frequency.WEEKDAYS:
-        unused += [CONF_INTERVAL_DAYS, CONF_ANCHOR]
+        unused += [CONF_INTERVAL_DAYS, CONF_ANCHOR, *hourly_keys]
+    elif frequency == Frequency.HOURLY:
+        unused += [CONF_INTERVAL_DAYS, CONF_ANCHOR, CONF_WEEKDAYS, CONF_SUN_OFFSET]
+        # Hourly runs start at the window start; a sun start doesn't apply.
+        if config.get(CONF_START_MODE) in (StartMode.SUNRISE, StartMode.SUNSET):
+            unused.append(CONF_START_MODE)
 
     start_mode = config.get(CONF_START_MODE)
     if start_mode == StartMode.TIME:
@@ -641,9 +659,20 @@ def _check_timing(config: dict[str, Any], warnings: list[str], today: date) -> N
             anchor=date.fromisoformat(config[CONF_ANCHOR]) if CONF_ANCHOR in config else today,
             weekdays=config.get(CONF_WEEKDAYS, []),
             start_time=time(6),
+            interval_hours=config.get(CONF_INTERVAL_HOURS, MIN_INTERVAL_HOURS),
+            window_start=time.fromisoformat(config.get(CONF_WINDOW_START, DEFAULT_WINDOW_START)),
+            window_end=time.fromisoformat(config.get(CONF_WINDOW_END, DEFAULT_WINDOW_END)),
         )
     except ValueError as err:
-        for key in (CONF_FREQUENCY, CONF_INTERVAL_DAYS, CONF_ANCHOR, CONF_WEEKDAYS):
+        for key in (
+            CONF_FREQUENCY,
+            CONF_INTERVAL_DAYS,
+            CONF_ANCHOR,
+            CONF_WEEKDAYS,
+            CONF_INTERVAL_HOURS,
+            CONF_WINDOW_START,
+            CONF_WINDOW_END,
+        ):
             config.pop(key, None)
         warnings.append(f"frequency: ignored ({err})")
 
@@ -675,7 +704,8 @@ def _parse_structure() -> dict[str, Any]:
             select([mode.value for mode in ZoneMode]),
         ),
         CONF_FREQUENCY: field(
-            "interval = every N days, weekdays = specific days of the week",
+            "interval = every N days, weekdays = specific days of the week, "
+            "hourly = every N hours between window_start and window_end each day",
             select([frequency.value for frequency in Frequency]),
         ),
         CONF_INTERVAL_DAYS: field("For interval: water every this many days", number),
@@ -684,6 +714,9 @@ def _parse_structure() -> dict[str, Any]:
             "For weekdays: day numbers, 0 = Monday ... 6 = Sunday",
             select([str(day) for day in range(7)], multiple=True),
         ),
+        CONF_INTERVAL_HOURS: field("For hourly: water every this many hours", number),
+        CONF_WINDOW_START: field("For hourly: local time of the first run each day", {"time": {}}),
+        CONF_WINDOW_END: field("For hourly: no run starts after this local time", {"time": {}}),
         CONF_START_MODE: field(
             "time = fixed clock time; sunrise/sunset = finish watering before the event",
             select([mode.value for mode in StartMode]),
@@ -809,6 +842,10 @@ def _valid_weekdays(value: Any) -> list[int]:
     if not days:
         raise ValueError("no weekdays")
     return sorted(days)
+
+
+def _valid_clock(value: Any) -> str:
+    return time.fromisoformat(str(value)).strftime("%H:%M:%S")
 
 
 def _valid_entity(hass: HomeAssistant, value: Any, *domains: str) -> str:

@@ -422,6 +422,87 @@ async def test_parse_rejects_bad_start_time(hass: HomeAssistant, parse_states: N
     assert result["config"]["start_mode"] == "time"
 
 
+HOURLY_PARSE = {
+    **{key: value for key, value in VALID_PARSE.items() if key not in ("weekdays", "sun_offset_minutes")},
+    "frequency": "hourly",
+    "interval_hours": 3,
+    "window_start": "06:00",
+    "window_end": "18:00",
+    "start_mode": "time",
+    "start_time": "06:00",
+}
+
+
+async def test_parse_hourly_description(hass: HomeAssistant, parse_states: None) -> None:
+    calls = mock_parse(hass, HOURLY_PARSE)
+
+    result = await ai.async_parse_schedule_description(
+        hass, AI_ENTITY, "Water every 3 hours from 6am to 6pm"
+    )
+
+    assert result["warnings"] == []
+    assert result["config"] == {
+        **HOURLY_PARSE,
+        "window_start": "06:00:00",
+        "window_end": "18:00:00",
+        "start_time": "06:00:00",
+    }
+    assert {"interval_hours", "window_start", "window_end"} <= set(calls[0].data["structure"])
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("interval_hours", 0), ("interval_hours", 24), ("interval_hours", 2.5), ("window_start", "25:00")],
+)
+async def test_parse_rejects_bad_hourly_values(
+    hass: HomeAssistant, parse_states: None, key: str, value: Any
+) -> None:
+    mock_parse(hass, {**HOURLY_PARSE, key: value})
+
+    result = await ai.async_parse_schedule_description(hass, AI_ENTITY, "text")
+
+    assert key not in result["config"]
+    assert any(warning.startswith(f"{key}:") for warning in result["warnings"])
+    assert result["config"]["frequency"] == "hourly"
+
+
+async def test_parse_hourly_window_end_before_start_drops_frequency(
+    hass: HomeAssistant, parse_states: None
+) -> None:
+    mock_parse(hass, {**HOURLY_PARSE, "window_end": "05:00"})
+
+    result = await ai.async_parse_schedule_description(hass, AI_ENTITY, "text")
+
+    assert not {"frequency", "interval_hours", "window_start", "window_end"} & result["config"].keys()
+    assert any(warning.startswith("frequency:") for warning in result["warnings"])
+
+
+async def test_parse_hourly_drops_day_and_sun_keys(hass: HomeAssistant, parse_states: None) -> None:
+    mock_parse(
+        hass,
+        {**HOURLY_PARSE, "weekdays": ["1"], "interval_days": 2, "start_mode": "sunrise",
+         "sun_offset_minutes": 10},
+    )
+
+    result = await ai.async_parse_schedule_description(hass, AI_ENTITY, "text")
+
+    config = result["config"]
+    assert config["frequency"] == "hourly"
+    assert config["interval_hours"] == 3
+    assert not {"weekdays", "interval_days", "start_mode", "sun_offset_minutes"} & config.keys()
+
+
+async def test_parse_drops_hourly_keys_for_other_frequencies(
+    hass: HomeAssistant, parse_states: None
+) -> None:
+    mock_parse(hass, {**VALID_PARSE, "interval_hours": 3, "window_start": "06:00"})
+
+    result = await ai.async_parse_schedule_description(hass, AI_ENTITY, "text")
+
+    assert result["config"]["frequency"] == "weekdays"
+    assert not {"interval_hours", "window_start"} & result["config"].keys()
+
+
 async def test_parse_drops_invalid_zones_only(hass: HomeAssistant, parse_states: None) -> None:
     zones = [
         {"entity_id": "valve.garden_irrigation_zone", "minutes": 500},

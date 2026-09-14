@@ -59,10 +59,11 @@
       },
       "frequency": {
         "title": "Frequency",
-        "description": "Choose how the watering days are picked.",
+        "description": "Choose how often the schedule waters.",
         "menu_options": {
           "interval": "Every X days",
-          "weekdays": "Days of the week"
+          "weekdays": "Days of the week",
+          "hourly": "Every X hours"
         }
       },
       "interval": {
@@ -78,6 +79,18 @@
         "description": "Pick the days this schedule waters.",
         "data": {
           "weekdays": "Days"
+        }
+      },
+      "hourly": {
+        "title": "Every X hours",
+        "description": "Waters every day at the first run time, then every X hours, as long as the run starts no later than the last run time. The window can't cross midnight. A run that is still going when the next start comes up makes that start a skip.",
+        "data": {
+          "interval_hours": "Hours between runs",
+          "window_start": "First run",
+          "window_end": "Last run no later than"
+        },
+        "data_description": {
+          "window_end": "A run starts at this time only when the hours line up: 06:00 every 3 hours until 18:00 runs at 06:00, 09:00, 12:00, 15:00 and 18:00."
         }
       },
       "start": {
@@ -274,7 +287,9 @@
       "ai_report_incomplete": "Pick both a report day and a report time, or neither.",
       "ai_provider_required": "Pick an LLM Vision provider to use a camera.",
       "describe_failed": "The AI task could not read the description: {error}",
-      "disable_failed": "The B-Hyve program could not be turned off: {error}"
+      "disable_failed": "The B-Hyve program could not be turned off: {error}",
+      "window_invalid": "The last run time must be after the first run time. The window can't cross midnight.",
+      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency."
     },
     "abort": {
       "no_legacy_helpers": "No legacy irrigation helpers were found.",
@@ -312,10 +327,11 @@
       },
       "frequency": {
         "title": "Frequency",
-        "description": "Choose how the watering days are picked.",
+        "description": "Choose how often the schedule waters.",
         "menu_options": {
           "interval": "Every X days",
-          "weekdays": "Days of the week"
+          "weekdays": "Days of the week",
+          "hourly": "Every X hours"
         }
       },
       "interval": {
@@ -331,6 +347,18 @@
         "description": "Pick the days this schedule waters.",
         "data": {
           "weekdays": "Days"
+        }
+      },
+      "hourly": {
+        "title": "Every X hours",
+        "description": "Waters every day at the first run time, then every X hours, as long as the run starts no later than the last run time. The window can't cross midnight. A run that is still going when the next start comes up makes that start a skip.",
+        "data": {
+          "interval_hours": "Hours between runs",
+          "window_start": "First run",
+          "window_end": "Last run no later than"
+        },
+        "data_description": {
+          "window_end": "A run starts at this time only when the hours line up: 06:00 every 3 hours until 18:00 runs at 06:00, 09:00, 12:00, 15:00 and 18:00."
         }
       },
       "start": {
@@ -518,7 +546,9 @@
       "wind_max_invalid": "Enter a wind speed of at least 0.1.",
       "no_occupancy_entities": "Pick at least one occupancy entity.",
       "ai_report_incomplete": "Pick both a report day and a report time, or neither.",
-      "ai_provider_required": "Pick an LLM Vision provider to use a camera."
+      "ai_provider_required": "Pick an LLM Vision provider to use a camera.",
+      "window_invalid": "The last run time must be after the first run time. The window can't cross midnight.",
+      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency."
     }
   },
   "selector": {

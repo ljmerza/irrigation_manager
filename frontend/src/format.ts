@@ -47,6 +47,23 @@ export const entityName = (hass: HomeAssistant, entityId: string | null | undefi
 const names = (hass: HomeAssistant, entityIds: string[]): string =>
   entityIds.map((id) => entityName(hass, id)).join(", ");
 
+// Some integrations name devices after their coordinates (NWS: "NWS: 35.91…,
+// -78.58…"), which then shows up in entity names. Keep the home location out of
+// the conditions summary.
+const COORDINATES = /\(?\s*-?\d{1,3}\.\d{2,}\s*,\s*-?\d{1,3}\.\d{2,}\s*\)?/g;
+
+const conditionEntityName = (hass: HomeAssistant, entityId: string | null | undefined): string => {
+  const name = entityName(hass, entityId)
+    .replace(COORDINATES, " ")
+    .replace(/\s+([:,])/g, "$1")
+    .replace(/\s{2,}/g, " ")
+    .replace(/^[\s:,–-]+|[\s:,–-]+$/g, "");
+  return name || (entityId ?? "");
+};
+
+const conditionNames = (hass: HomeAssistant, entityIds: string[]): string =>
+  entityIds.map((id) => conditionEntityName(hass, id)).join(", ");
+
 /** " in" style unit suffix from an entity's unit_of_measurement, or "". */
 const unitSuffix = (hass: HomeAssistant, entityId: string | undefined): string => {
   const unit = hass.states[entityId ?? ""]?.attributes.unit_of_measurement;
@@ -153,6 +170,13 @@ export const countdown = (iso: string, now: number): string => {
 };
 
 export const frequencySummary = (hass: HomeAssistant, config: ScheduleConfig): string => {
+  if (config.frequency === "hourly") {
+    const hours = config.interval_hours ?? 1;
+    const every = hours === 1 ? "Every hour" : `Every ${hours} hours`;
+    return config.window_start && config.window_end
+      ? `${every}, ${formatClock(hass, config.window_start)}–${formatClock(hass, config.window_end)}`
+      : every;
+  }
   if (config.frequency === "interval") {
     const days = config.interval_days ?? 1;
     const every = days === 1 ? "Every day" : `Every ${days} days`;
@@ -166,6 +190,10 @@ export const frequencySummary = (hass: HomeAssistant, config: ScheduleConfig): s
 };
 
 export const startSummary = (hass: HomeAssistant, config: ScheduleConfig): string => {
+  if (config.frequency === "hourly") {
+    // The window in frequencySummary already gives the times.
+    return "Every day";
+  }
   if (config.start_mode === "time") {
     return config.start_time ? `Starts at ${formatClock(hass, config.start_time)}` : "Fixed time";
   }
@@ -209,7 +237,7 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
         : `in the last ${plural(config.rain_hours ?? 24, "hour")}`;
     let source: string;
     if (sensors.length <= 1) {
-      source = entityName(hass, sensors[0]);
+      source = conditionEntityName(hass, sensors[0]);
     } else if (config.rain_aggregate === "median") {
       source = `median of ${sensors.length} stations`;
     } else if (config.rain_aggregate === "quorum") {
@@ -252,7 +280,7 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
     const quorum = Math.min(config.forecast_quorum ?? 1, Math.max(entities.length, 1));
     const source =
       entities.length <= 1
-        ? entityName(hass, entities[0])
+        ? conditionEntityName(hass, entities[0])
         : quorum <= 1
           ? `any of ${entities.length} forecasts`
           : `${quorum} of ${entities.length} forecasts`;
@@ -277,7 +305,7 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
     }
     if (parts.length) {
       const source = config.temperature_sensor
-        ? ` (${entityName(hass, config.temperature_sensor)})`
+        ? ` (${conditionEntityName(hass, config.temperature_sensor)})`
         : "";
       lines.push(`Skip if the temperature is ${parts.join(" or ")}${source}`);
     }
@@ -292,12 +320,12 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
     lines.push(
       `Skip if the average wind over ${config.wind_minutes ?? 30} min is ≥ ` +
         `${formatNumber(hass, config.wind_max ?? 0, 1)}${unitSuffix(hass, config.wind_sensor)} ` +
-        `(${entityName(hass, config.wind_sensor)})`
+        `(${conditionEntityName(hass, config.wind_sensor)})`
     );
   }
 
   if (conditions.includes("occupancy")) {
-    const who = names(hass, config.occupancy_entities ?? []) || "an occupancy entity";
+    const who = conditionNames(hass, config.occupancy_entities ?? []) || "an occupancy entity";
     lines.push(
       config.occupancy_action === "skip"
         ? `Skip while ${who} is on`
@@ -311,7 +339,7 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
   if (conditions.includes("moisture")) {
     const sensors = config.moisture_sensors ?? [];
     const which =
-      sensors.length === 1 ? entityName(hass, sensors[0]) : `any of ${sensors.length} sensors`;
+      sensors.length === 1 ? conditionEntityName(hass, sensors[0]) : `any of ${sensors.length} sensors`;
     const threshold = formatNumber(hass, config.moisture_threshold ?? 0, 1);
     if (config.moisture_mode === "trigger") {
       lines.push(`Also waters on other days when ${which} reads below ${threshold}%`);

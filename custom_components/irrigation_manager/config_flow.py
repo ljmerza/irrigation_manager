@@ -67,6 +67,7 @@ from .const import (
     CONF_FORECAST_QUORUM,
     CONF_FREQUENCY,
     CONF_INTERVAL_DAYS,
+    CONF_INTERVAL_HOURS,
     CONF_MOISTURE_MODE,
     CONF_MOISTURE_SENSORS,
     CONF_MOISTURE_THRESHOLD,
@@ -103,6 +104,8 @@ from .const import (
     CONF_WIND_MAX,
     CONF_WIND_MINUTES,
     CONF_WIND_SENSOR,
+    CONF_WINDOW_END,
+    CONF_WINDOW_START,
     CONF_ZONE_ENTITY,
     CONF_ZONE_MINUTES,
     CONF_ZONE_MODE,
@@ -110,6 +113,7 @@ from .const import (
     DEFAULT_FORECAST_HOURS,
     DEFAULT_FORECAST_PROBABILITY,
     DEFAULT_FORECAST_QUORUM,
+    DEFAULT_INTERVAL_HOURS,
     DEFAULT_MOISTURE_MODE,
     DEFAULT_MOISTURE_THRESHOLD,
     DEFAULT_OCCUPANCY_MAX_DELAY,
@@ -121,13 +125,17 @@ from .const import (
     DEFAULT_SUN_OFFSET,
     DEFAULT_TEMPERATURE_FORECAST_HOURS,
     DEFAULT_WIND_MINUTES,
+    DEFAULT_WINDOW_END,
+    DEFAULT_WINDOW_START,
     DEFAULT_ZONE_MINUTES,
     DOMAIN,
     MAX_INTERVAL_DAYS,
+    MAX_INTERVAL_HOURS,
     MAX_RAIN_DELAY_HOURS,
     MAX_SUN_OFFSET,
     MAX_ZONE_MINUTES,
     MIN_INTERVAL_DAYS,
+    MIN_INTERVAL_HOURS,
     MIN_SUN_OFFSET,
     MIN_ZONE_MINUTES,
     ForecastMode,
@@ -183,6 +191,7 @@ FIELD_DISABLE_PROGRAM = "disable_program"
 _FREQUENCY_KEYS: dict[str, tuple[str, ...]] = {
     Frequency.INTERVAL: (CONF_INTERVAL_DAYS, CONF_ANCHOR),
     Frequency.WEEKDAYS: (CONF_WEEKDAYS,),
+    Frequency.HOURLY: (CONF_INTERVAL_HOURS, CONF_WINDOW_START, CONF_WINDOW_END),
 }
 _START_KEYS: dict[str, tuple[str, ...]] = {
     StartMode.TIME: (CONF_START_TIME,),
@@ -463,7 +472,11 @@ class ScheduleFlowMixin:
     ) -> ConfigFlowResult:
         return self.async_show_menu(
             step_id="frequency",
-            menu_options=[Frequency.INTERVAL.value, Frequency.WEEKDAYS.value],
+            menu_options=[
+                Frequency.INTERVAL.value,
+                Frequency.WEEKDAYS.value,
+                Frequency.HOURLY.value,
+            ],
         )
 
     async def async_step_interval(
@@ -517,6 +530,47 @@ class ScheduleFlowMixin:
         return self.async_show_form(
             step_id="weekdays", data_schema=schema, errors=errors
         )
+
+    async def async_step_hourly(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            hours = _whole(user_input, CONF_INTERVAL_HOURS, errors)
+            window_start = cv.time(user_input[CONF_WINDOW_START])
+            window_end = cv.time(user_input[CONF_WINDOW_END])
+            if window_end <= window_start:
+                # The window can't cross midnight.
+                errors[CONF_WINDOW_END] = "window_invalid"
+            if not errors:
+                start = window_start.strftime("%H:%M:%S")
+                self._set_choice(_FREQUENCY_KEYS, CONF_FREQUENCY, Frequency.HOURLY)
+                self._config[CONF_INTERVAL_HOURS] = hours
+                self._config[CONF_WINDOW_START] = start
+                self._config[CONF_WINDOW_END] = window_end.strftime("%H:%M:%S")
+                # Runs start at the window start and repeat from there, so the
+                # start-time step is skipped: store it as a fixed-time schedule.
+                self._set_choice(_START_KEYS, CONF_START_MODE, StartMode.TIME)
+                self._config[CONF_START_TIME] = start
+                return await self.async_step_conditions()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_INTERVAL_HOURS,
+                    default=self._default(CONF_INTERVAL_HOURS, DEFAULT_INTERVAL_HOURS),
+                ): _number_selector(MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS, unit="h"),
+                vol.Required(
+                    CONF_WINDOW_START,
+                    default=self._default(CONF_WINDOW_START, DEFAULT_WINDOW_START),
+                ): TimeSelector(),
+                vol.Required(
+                    CONF_WINDOW_END,
+                    default=self._default(CONF_WINDOW_END, DEFAULT_WINDOW_END),
+                ): TimeSelector(),
+            }
+        )
+        return self.async_show_form(step_id="hourly", data_schema=schema, errors=errors)
 
     # --- start time ---------------------------------------------------------
 
@@ -816,16 +870,22 @@ class ScheduleFlowMixin:
         if user_input is not None:
             sensors = _unique(user_input.get(CONF_MOISTURE_SENSORS))
             threshold = float(user_input[CONF_MOISTURE_THRESHOLD])
+            mode = MoistureMode(user_input[CONF_MOISTURE_MODE])
             if not sensors:
                 errors[CONF_MOISTURE_SENSORS] = "no_moisture_sensors"
             if not _in_range(threshold, MIN_MOISTURE_THRESHOLD, 100):
                 errors[CONF_MOISTURE_THRESHOLD] = "moisture_threshold_invalid"
+            if (
+                mode is MoistureMode.TRIGGER
+                and self._config.get(CONF_FREQUENCY) == Frequency.HOURLY
+            ):
+                # Trigger mode adds runs on non-schedule days, and every day is
+                # a schedule day for an hourly schedule.
+                errors[CONF_MOISTURE_MODE] = "moisture_trigger_hourly"
             if not errors:
                 self._config[CONF_MOISTURE_SENSORS] = sensors
                 self._config[CONF_MOISTURE_THRESHOLD] = threshold
-                self._config[CONF_MOISTURE_MODE] = MoistureMode(
-                    user_input[CONF_MOISTURE_MODE]
-                ).value
+                self._config[CONF_MOISTURE_MODE] = mode.value
                 self._config[CONF_MOISTURE_UNAVAILABLE] = MoistureUnavailable(
                     user_input[CONF_MOISTURE_UNAVAILABLE]
                 ).value

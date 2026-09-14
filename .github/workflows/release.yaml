@@ -1,25 +1,46 @@
 name: Release
 
+# Push a tag like v0.2.0 to release. The tests run, the zip is built with the
+# tag's version written into manifest.json, and the GitHub release is created
+# with the zip attached.
 on:
-  release:
-    types: [published]
+  push:
+    tags: ["v*"]
+
+# Never cancel a release mid-publish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release-zip:
-    name: Build and attach release ZIP
+  tests:
+    name: Pytest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ljmerza/misc-actions/actions/python-test@v2
+        with:
+          python-version: "3.12"
+          requirements-file: requirements_test.txt
+          prerelease: allow
+
+  build:
+    name: Build release zip
+    needs: tests
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set integration version from release tag
+      - name: Set integration version from the tag
         run: |
           version="${GITHUB_REF_NAME#v}"
           if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]]; then
-            echo "::error::Release tag '$GITHUB_REF_NAME' is not a version like 0.2.0 or v0.2.0"
+            echo "::error::Tag '$GITHUB_REF_NAME' is not a version like v0.2.0"
             exit 1
           fi
           jq --arg v "$version" '.version = $v' \
@@ -31,10 +52,31 @@ jobs:
       # the integration's files at its root.
       - name: Build irrigation_manager.zip
         run: |
+          mkdir -p dist
           cd custom_components/irrigation_manager
-          zip -r ../../irrigation_manager.zip . -x '*__pycache__*' '*.pyc'
+          zip -r ../../dist/irrigation_manager.zip . -x '*__pycache__*' '*.pyc'
 
-      - name: Attach ZIP to release
-        uses: softprops/action-gh-release@v2
+      - name: Upload the zip
+        uses: actions/upload-artifact@v7
         with:
-          files: irrigation_manager.zip
+          name: irrigation-manager-zip
+          path: dist/irrigation_manager.zip
+          if-no-files-found: error
+
+  github-release:
+    name: GitHub release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # github-release passes --verify-tag, which shells out to git.
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ljmerza/misc-actions/actions/github-release@v2
+        with:
+          tag: ${{ github.ref_name }}
+          title: Irrigation Manager ${{ github.ref_name }}
+          artifact-name: irrigation-manager-zip
+          artifact-path: dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}

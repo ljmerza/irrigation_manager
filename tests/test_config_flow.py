@@ -190,6 +190,9 @@ AI_VALIDATED_KEYS = {
     "interval_days",
     "anchor",
     "weekdays",
+    "interval_hours",
+    "window_start",
+    "window_end",
     "start_mode",
     "start_time",
     "sun_offset_minutes",
@@ -462,7 +465,7 @@ async def test_interval_fixed_time_single_zone(hass: HomeAssistant) -> None:
     result = await configure(hass, result, {"valve.deck_zone": 15})
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "frequency"
-    assert result["menu_options"] == ["interval", "weekdays"]
+    assert result["menu_options"] == ["interval", "weekdays", "hourly"]
 
     result = await menu(hass, result, "interval")
     assert result["step_id"] == "interval"
@@ -496,6 +499,164 @@ async def test_interval_fixed_time_single_zone(hass: HomeAssistant) -> None:
     assert schedule.anchor == TZ_DATE
     assert schedule.start_time == time(6, 30)
     assert_config_valid(hass, result["data"])
+
+
+async def to_hourly_step(hass: HomeAssistant) -> dict[str, Any]:
+    result = await start_create(hass)
+    result = await configure(hass, result, {"name": "Beds"})
+    result = await configure(hass, result, {"zones": ["valve.deck_zone"]})
+    result = await configure(hass, result, {"valve.deck_zone": 10})
+    result = await menu(hass, result, "hourly")
+    assert result["step_id"] == "hourly"
+    return result
+
+
+async def test_hourly_window_skips_start_menu(hass: HomeAssistant) -> None:
+    result = await to_hourly_step(hass)
+    assert (
+        schema_default(result, "interval_hours"),
+        schema_default(result, "window_start"),
+        schema_default(result, "window_end"),
+    ) == (3, "06:00:00", "18:00:00")
+
+    result = await configure(
+        hass, result, {"interval_hours": 3, "window_start": "06:00", "window_end": "18:00"}
+    )
+    assert result["step_id"] == "conditions"  # no start-time menu
+    result = await configure(hass, result, {"skip_conditions": []})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["data"] == {
+        "name": "Beds",
+        "zones": [{"entity_id": "valve.deck_zone", "minutes": 10}],
+        "zone_mode": "sequential",
+        "frequency": "hourly",
+        "interval_hours": 3,
+        "window_start": "06:00:00",
+        "window_end": "18:00:00",
+        "start_mode": "time",
+        "start_time": "06:00:00",
+        "skip_conditions": [],
+    }
+    assert_config_valid(hass, result["data"])
+
+    tz = ZoneInfo("America/New_York")
+    schedule = schedule_from_config(result["data"])
+    after = datetime(2026, 9, 14, 0, 0, tzinfo=tz)
+    hours = []
+    for _ in range(6):
+        after = next_run(schedule, after, timedelta(minutes=10), tz, lambda event, day: None)
+        hours.append(after.hour)
+    assert hours == [6, 9, 12, 15, 18, 6]
+
+
+async def test_hourly_validation(hass: HomeAssistant) -> None:
+    result = await to_hourly_step(hass)
+
+    for end in ("06:00", "05:00"):
+        result = await configure(
+            hass, result, {"interval_hours": 3, "window_start": "06:00", "window_end": end}
+        )
+        assert result["step_id"] == "hourly"
+        assert result["errors"] == {"window_end": "window_invalid"}
+
+    result = await configure(
+        hass,
+        result,
+        {"interval_hours": float("nan"), "window_start": "06:00", "window_end": "18:00"},
+    )
+    assert result["errors"] == {"interval_hours": "number_invalid"}
+
+    for hours in (0, 24):
+        with pytest.raises(InvalidData):
+            await configure(
+                hass,
+                result,
+                {"interval_hours": hours, "window_start": "06:00", "window_end": "18:00"},
+            )
+
+
+def without_conditions(config: dict[str, Any], *keep: str) -> dict[str, Any]:
+    prefixes = tuple(
+        prefix for prefix in ("rain_", "weather_", "forecast_", "moisture_") if prefix not in keep
+    )
+    data = {key: value for key, value in config.items() if not key.startswith(prefixes)}
+    data["skip_conditions"] = [prefix.rstrip("_") for prefix in keep]
+    return data
+
+
+async def test_options_switch_to_hourly_and_back(hass: HomeAssistant) -> None:
+    entry = await setup_entry(hass, title="Front lawn", data=without_conditions(FULL_CONFIG))
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    for _ in range(3):  # name, zones, run times: keep the defaults
+        result = await options_configure(hass, result, {})
+    result = await options_menu(hass, result, "hourly")
+    result = await options_configure(
+        hass, result, {"interval_hours": 2, "window_start": "07:00", "window_end": "19:00"}
+    )
+    assert result["step_id"] == "conditions"
+    result = await options_configure(hass, result, {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    # Weekdays and the sunrise offset are gone.
+    assert entry.options == {
+        "name": "Front lawn",
+        "zones": FULL_CONFIG["zones"],
+        "zone_mode": "concurrent",
+        "frequency": "hourly",
+        "interval_hours": 2,
+        "window_start": "07:00:00",
+        "window_end": "19:00:00",
+        "start_mode": "time",
+        "start_time": "07:00:00",
+        "skip_conditions": [],
+    }
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    for _ in range(3):
+        result = await options_configure(hass, result, {})
+    result = await options_menu(hass, result, "interval")
+    result = await options_configure(hass, result, {"interval_days": 2, "anchor": "2026-09-14"})
+    result = await options_menu(hass, result, "start_time")
+    assert schema_default(result, "start_time") == "07:00:00"
+    result = await options_configure(hass, result, {})
+    result = await options_configure(hass, result, {})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    # The hourly keys are gone.
+    assert entry.options == {
+        "name": "Front lawn",
+        "zones": FULL_CONFIG["zones"],
+        "zone_mode": "concurrent",
+        "frequency": "interval",
+        "interval_days": 2,
+        "anchor": "2026-09-14",
+        "start_mode": "time",
+        "start_time": "07:00:00",
+        "skip_conditions": [],
+    }
+
+
+async def test_hourly_rejects_moisture_trigger_mode(hass: HomeAssistant) -> None:
+    data = without_conditions(FULL_CONFIG, "moisture_")
+    assert data["moisture_mode"] == "trigger"
+    entry = await setup_entry(hass, title="Front lawn", data=data)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    for _ in range(3):
+        result = await options_configure(hass, result, {})
+    result = await options_menu(hass, result, "hourly")
+    result = await options_configure(hass, result, {})
+    assert result["step_id"] == "conditions"
+    result = await options_configure(hass, result, {})
+    assert result["step_id"] == "moisture"
+
+    result = await options_configure(hass, result, {})
+    assert result["step_id"] == "moisture"
+    assert result["errors"] == {"moisture_mode": "moisture_trigger_hourly"}
+
+    result = await options_configure(hass, result, {"moisture_mode": "skip"})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["frequency"] == "hourly"
+    assert entry.options["moisture_mode"] == "skip"
 
 
 async def test_every_v02_setting(hass: HomeAssistant) -> None:
@@ -1622,6 +1783,16 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
     result = await m(await c(result, {"interval_days": 1, "anchor": "2026-09-13"}), "start_sunrise")
     assert result["step_id"] == "start_sunrise"
 
+    result = await m(await start_flow(hass), "create")
+    result = await c(result, {"name": "Fourth"})
+    result = await c(result, {"zones": ["valve.deck_zone"]})
+    result = await c(result, {"valve.deck_zone": 10})
+    result = await m(result, "hourly")
+    result = await c(result, {"interval_hours": 3, "window_start": "06:00", "window_end": "05:00"})
+    assert result["errors"] == {"window_end": "window_invalid"}
+    result = await c(result, {"interval_hours": 3, "window_start": "06:00", "window_end": "18:00"})
+    assert result["step_id"] == "conditions"
+
     with patch(READ_LEGACY, return_value=deepcopy(LEGACY)):
         result = await m(await start_flow(hass), "import_legacy")
         assert result["step_id"] == "import_legacy"
@@ -1648,7 +1819,7 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
             "user", "name", "zones", "zone_minutes", "frequency", "weekdays", "interval",
             "start", "start_time", "start_sunset", "start_sunrise", "conditions", "rain",
             "forecast", "moisture", "temperature", "wind", "occupancy", "ai",
-            "import_legacy", "import_bhyve", "describe", "bhyve_disable",
+            "import_legacy", "import_bhyve", "describe", "bhyve_disable", "hourly",
         )
     } <= shown
     assert ("config", "no_bhyve_programs") not in shown  # aborts carry reason, not step_id

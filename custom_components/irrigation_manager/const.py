@@ -284,3 +284,16 @@ ATTR_ZONE: Final = "zone"  # zone entity_id for run_zone
 ATTR_ENABLED: Final = "enabled"
 ATTR_LIMIT: Final = "limit"
 ATTR_DAYS: Final = "days"
+
+# --- hourly ---------------------------------------------------------------
+# Frequency HOURLY: every day, every CONF_INTERVAL_HOURS from CONF_WINDOW_START
+# while the start is no later than CONF_WINDOW_END. Stored with start_mode
+# "time" and start_time equal to the window start.
+CONF_INTERVAL_HOURS: Final = "interval_hours"  # int, MIN/MAX_INTERVAL_HOURS
+CONF_WINDOW_START: Final = "window_start"  # "HH:MM:SS" local
+CONF_WINDOW_END: Final = "window_end"  # "HH:MM:SS" local, after the window start
+MIN_INTERVAL_HOURS: Final = 1
+MAX_INTERVAL_HOURS: Final = 23
+DEFAULT_INTERVAL_HOURS: Final = 3
+DEFAULT_WINDOW_START: Final = "06:00:00"
+DEFAULT_WINDOW_END: Final = "18:00:00"

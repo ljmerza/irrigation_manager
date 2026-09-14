@@ -34,6 +34,7 @@ from custom_components.irrigation_manager.const import (
     CONF_ANCHOR,
     CONF_FREQUENCY,
     CONF_INTERVAL_DAYS,
+    CONF_INTERVAL_HOURS,
     CONF_MOISTURE_MODE,
     CONF_NAME,
     CONF_OCCUPANCY_ENTITIES,
@@ -52,6 +53,8 @@ from custom_components.irrigation_manager.const import (
     CONF_START_TIME,
     CONF_SUN_OFFSET,
     CONF_WEEKDAYS,
+    CONF_WINDOW_END,
+    CONF_WINDOW_START,
     CONF_ZONE_ENTITY,
     CONF_ZONE_MINUTES,
     CONF_ZONE_MODE,
@@ -204,6 +207,75 @@ async def test_zone_durations() -> None:
         (ZONE_A, timedelta(minutes=10)),
         (ZONE_B, timedelta(minutes=5)),
     ]
+
+
+# --- hourly -----------------------------------------------------------------------
+
+
+def hourly_config(**overrides: Any) -> dict[str, Any]:
+    """Every hour from 06:00 to 08:00, zone A 10 min then zone B 5 min."""
+    config = make_config(
+        **{
+            CONF_FREQUENCY: "hourly",
+            CONF_INTERVAL_HOURS: 1,
+            CONF_WINDOW_START: "06:00:00",
+            CONF_WINDOW_END: "08:00:00",
+        },
+        **overrides,
+    )
+    config.pop(CONF_WEEKDAYS)
+    return config
+
+
+async def test_schedule_from_config_builds_hourly() -> None:
+    schedule = schedule_from_config(hourly_config())
+    assert schedule.frequency == "hourly"
+    assert schedule.interval_hours == 1
+    assert (schedule.window_start, schedule.window_end) == (time(6), time(8))
+    assert schedule.start_time == time(6)
+
+
+async def test_hourly_schedule_runs_at_every_slot(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    runner = await make_runner(hourly_config())
+    assert runner.snapshot()["next_run"] == local(2026, 9, 14, 6).isoformat()
+
+    for hour in (6, 7, 8):
+        await advance_to(hass, freezer, local(2026, 9, 14, hour))
+        assert runner.running
+        await advance_to(hass, freezer, local(2026, 9, 14, hour, 10))
+        await advance_to(hass, freezer, local(2026, 9, 14, hour, 15))
+        assert not runner.running
+
+    assert decide.await_count == 3
+    assert len(calls["open"]) == 3
+    assert len(calls["on"]) == 3
+    assert runner.snapshot()["next_run"] == local(2026, 9, 15, 6).isoformat()
+
+
+async def test_hourly_run_overlapping_next_slot_is_skipped_busy(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    runner = await make_runner(
+        hourly_config(**{CONF_ZONES: [{CONF_ZONE_ENTITY: ZONE_A, CONF_ZONE_MINUTES: 70}]})
+    )
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    assert runner.running
+    await advance_to(hass, freezer, local(2026, 9, 14, 7))
+    assert runner.running
+    assert decide.await_count == 1  # the 07:00 start found the 06:00 run still going
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 7, 10))
+    assert not runner.running
+    assert runner.status is Status.SKIPPED_BUSY
+    assert runner.last_details["skipped_busy_at"] == local(2026, 9, 14, 7).isoformat()
+    assert runner.snapshot()["next_run"] == local(2026, 9, 14, 8).isoformat()
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 8))
+    assert runner.running
+    assert decide.await_count == 2
 
 
 # --- runs -----------------------------------------------------------------------

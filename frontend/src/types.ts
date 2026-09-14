@@ -40,10 +40,13 @@ export interface ScheduleConfig {
   name?: string;
   zones?: ZoneConfig[];
   zone_mode?: "sequential" | "concurrent";
-  frequency?: "interval" | "weekdays";
+  frequency?: "interval" | "weekdays" | "hourly";
   interval_days?: number;
   anchor?: string;
   weekdays?: number[];
+  interval_hours?: number;
+  window_start?: string;
+  window_end?: string;
   start_mode?: "time" | "sunrise" | "sunset";
   start_time?: string;
   sun_offset_minutes?: number;

@@ -48,6 +48,7 @@ from .const import (
     CONF_ANCHOR,
     CONF_FREQUENCY,
     CONF_INTERVAL_DAYS,
+    CONF_INTERVAL_HOURS,
     CONF_MOISTURE_MODE,
     CONF_OCCUPANCY_ENTITIES,
     CONF_OCCUPANCY_MAX_DELAY,
@@ -63,6 +64,8 @@ from .const import (
     CONF_START_TIME,
     CONF_SUN_OFFSET,
     CONF_WEEKDAYS,
+    CONF_WINDOW_END,
+    CONF_WINDOW_START,
     CONF_ZONE_ENTITY,
     CONF_ZONE_MINUTES,
     CONF_ZONE_MODE,
@@ -117,6 +120,8 @@ def schedule_from_config(config: Mapping[str, Any]) -> Schedule:
     """Build the scheduler's Schedule from stored config values."""
     anchor = config.get(CONF_ANCHOR)
     start_time = config.get(CONF_START_TIME)
+    window_start = config.get(CONF_WINDOW_START)
+    window_end = config.get(CONF_WINDOW_END)
     conditions = config.get(CONF_SKIP_CONDITIONS) or []
     moisture_mode = config.get(CONF_MOISTURE_MODE, DEFAULT_MOISTURE_MODE)
     return Schedule(
@@ -133,6 +138,9 @@ def schedule_from_config(config: Mapping[str, Any]) -> Schedule:
             SkipCondition.MOISTURE in conditions
             and moisture_mode == MoistureMode.TRIGGER
         ),
+        interval_hours=int(config.get(CONF_INTERVAL_HOURS, 1)),
+        window_start=time.fromisoformat(window_start) if window_start else None,
+        window_end=time.fromisoformat(window_end) if window_end else None,
     )
 
 

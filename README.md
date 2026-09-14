@@ -45,10 +45,12 @@ Docker bind mount example:
 1. **Name**.
 2. **Zones**: one or more `valve.*` / `switch.*` entities.
 3. **Run time** in minutes per zone (1–180). With more than one zone, choose **sequential** (one after another) or **concurrent** (all at once).
-4. **Frequency**: every N days from a first-run date, or chosen days of the week.
-5. **Start time**: a fixed time, or relative to sunrise/sunset. For sunrise/sunset the offset is when watering **finishes**: start = event − total run time − offset. A negative offset finishes after the event. Sun times come from Home Assistant's configured location.
+4. **Frequency**: every N days from a first-run date, chosen days of the week, or every N hours between a first and last run time each day.
+5. **Start time**: a fixed time, or relative to sunrise/sunset. For sunrise/sunset the offset is when watering **finishes**: start = event − total run time − offset. A negative offset finishes after the event. Sun times come from Home Assistant's configured location. Not asked for every-N-hours schedules, which start at the first run time.
 6. **Conditions**: any combination, each with its own step (see below), plus **stale sensor hours**.
 7. **AI report**: shown when an `ai_task` entity exists; every field is optional.
+
+**Every N hours** runs every day at the first run time, then every N hours while the start is no later than the last run time. The last run time only gets a run when the hours line up: 06:00 every 3 hours until 18:00 runs at 06:00, 09:00, 12:00, 15:00 and 18:00; until 17:00 the last run is at 15:00. Conditions are checked before every run. Moisture *trigger* mode can't be used with it, because every day is already a schedule day.
 
 Everything except the per-zone run time numbers can be changed later with **Configure** on the entry. Changing which zones are in a schedule reloads the entry and interrupts an active run.
 
@@ -231,6 +233,7 @@ Importing the legacy watering helpers and B-Hyve programs, and retiring the old 
 - Assist intents are only offered to assistants with the valve or switch domain exposed.
 - The rain, moisture, temperature and wind sensor pickers only list sensors with the matching `device_class`.
 - AI reports depend on the model behind the AI task; check them before acting on them.
+- An every-N-hours window can't cross midnight. A run that is still going when the next start comes up makes that start a skip (`skipped_busy`).
 
 ## Development
 

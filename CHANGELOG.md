@@ -7,6 +7,7 @@ Notable changes to Irrigation Manager. Versions follow semantic versioning; the 
 Adds rain and weather conditions, automations and API, AI reports, and migration from existing setups.
 
 ### Added
+- Every N hours frequency: runs every day every N hours between a first and last run time (for example every 3 hours from 06:00 to 18:00).
 - Rain and weather:
   - Several rain sensors per schedule, combined by max, median or quorum.
   - Rain window "since the last watering", capped at a maximum number of hours.

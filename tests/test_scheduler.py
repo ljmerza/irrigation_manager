@@ -16,6 +16,7 @@ from irrigation_manager.scheduler import (
     Schedule,
     StartMode,
     ZoneMode,
+    hourly_starts,
     next_occurrence,
     next_run,
     runs_on,
@@ -324,3 +325,96 @@ def test_daily_across_spring_forward_keeps_wall_clock():
     assert (second.hour, second.minute) == (6, 0)
     # Same wall-clock time, but only 23 real hours apart.
     assert second.astimezone(UTC) - first.astimezone(UTC) == timedelta(hours=23)
+
+
+# --- hourly -------------------------------------------------------------------
+
+
+def hourly(every: int = 3, start: time = time(6), end: time = time(18)) -> Schedule:
+    return Schedule(Frequency.HOURLY, StartMode.TIME, interval_hours=every,
+                    window_start=start, window_end=end)
+
+
+def occurrences(schedule: Schedule, after: datetime, count: int) -> list[Occurrence]:
+    """`count` consecutive occurrences, each asked for after the previous one."""
+    found = []
+    for _ in range(count):
+        occurrence = next_occurrence(schedule, after, timedelta(minutes=15), TZ, fake_sun())
+        found.append(occurrence)
+        after = occurrence.start
+    return found
+
+
+def test_hourly_slots_include_end_when_it_lines_up():
+    found = occurrences(hourly(), local(2026, 9, 14), 6)
+    assert [o.start for o in found] == [
+        local(2026, 9, 14, 6), local(2026, 9, 14, 9), local(2026, 9, 14, 12),
+        local(2026, 9, 14, 15), local(2026, 9, 14, 18), local(2026, 9, 15, 6),
+    ]
+    assert all(o.scheduled for o in found)
+
+
+def test_hourly_last_slot_stops_before_end_when_it_does_not_line_up():
+    found = occurrences(hourly(end=time(17)), local(2026, 9, 14), 5)
+    assert [o.start for o in found] == [
+        local(2026, 9, 14, 6), local(2026, 9, 14, 9), local(2026, 9, 14, 12),
+        local(2026, 9, 14, 15), local(2026, 9, 15, 6),
+    ]
+
+
+def test_hourly_after_last_slot_is_next_days_first():
+    assert next_run(hourly(), local(2026, 9, 14, 18, 1), timedelta(0), TZ, fake_sun()) == local(2026, 9, 15, 6)
+
+
+def test_hourly_interval_longer_than_window_gives_only_the_start():
+    found = occurrences(hourly(every=5, end=time(8)), local(2026, 9, 14), 2)
+    assert [o.start for o in found] == [local(2026, 9, 14, 6), local(2026, 9, 15, 6)]
+
+
+def test_hourly_next_is_strictly_after():
+    assert next_run(hourly(), local(2026, 9, 14, 9), timedelta(0), TZ, fake_sun()) == local(2026, 9, 14, 12)
+    assert next_run(hourly(), local(2026, 9, 14, 8, 59), timedelta(0), TZ, fake_sun()) == local(2026, 9, 14, 9)
+
+
+def test_hourly_spring_forward_gap_slot_is_not_duplicated():
+    schedule = hourly(every=1, start=time(0), end=time(6))
+    starts = hourly_starts(schedule, date(2026, 3, 8), TZ)
+    instants = [start.astimezone(UTC) for start in starts]
+    assert len(instants) == len(set(instants))
+    # 02:00 doesn't exist that night; it moves to 03:00 EDT, which is the 03:00 slot.
+    assert [(start.hour, start.minute) for start in starts] == [
+        (0, 0), (1, 0), (3, 0), (4, 0), (5, 0), (6, 0),
+    ]
+    found = occurrences(schedule, local(2026, 3, 7, 23), 7)
+    assert [o.start.astimezone(UTC) for o in found[:6]] == instants
+    assert found[6].start == local(2026, 3, 9, 0)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"interval_hours": 0},
+        {"interval_hours": 24},
+        {"window_end": time(6)},
+        {"window_end": time(5)},
+        {"window_start": None},
+        {"start_mode": "sunrise"},
+    ],
+    ids=["hours-zero", "hours-24", "end-equals-start", "end-before-start", "no-window", "sun-start"],
+)
+def test_hourly_rejects_invalid(kwargs):
+    values = {"frequency": "hourly", "start_mode": "time", "interval_hours": 3,
+              "window_start": time(6), "window_end": time(18), **kwargs}
+    with pytest.raises(ValueError):
+        Schedule(**values)
+
+
+def test_hourly_defaults_start_time_and_ignores_daily_check():
+    schedule = Schedule(frequency="hourly", start_mode="time", interval_hours=3,
+                        window_start=time(6), window_end=time(18), check_every_day=True)
+    assert schedule.frequency is Frequency.HOURLY
+    assert schedule.start_time == time(6)
+    assert runs_on(schedule, SUNDAY)
+    assert scheduled_start(schedule, SUNDAY, timedelta(0), TZ, fake_sun()) == local(2026, 9, 13, 6)
+    occurrence = next_occurrence(schedule, local(2026, 9, 13, 7), timedelta(0), TZ, fake_sun())
+    assert occurrence == Occurrence(local(2026, 9, 13, 9), scheduled=True)

@@ -10,7 +10,9 @@ Skipping is not handled here: after a run or a skip the runner simply asks for
 the next occurrence after the one it just handled, so skips never shift the
 cadence. With ``check_every_day`` (moisture "trigger" mode) every day at the
 start time is an occurrence, flagged by whether it is a schedule day; the runner
-decides whether an unscheduled day waters.
+decides whether an unscheduled day waters. HOURLY schedules have several
+occurrences a day — every ``interval_hours`` from the window start up to the
+window end — and every one of them is a schedule occurrence.
 """
 from __future__ import annotations
 
@@ -29,10 +31,11 @@ MAX_SEARCH_DAYS = 400
 
 
 class Frequency(StrEnum):
-    """How schedule days are chosen."""
+    """How schedule days (and, for HOURLY, the times within a day) are chosen."""
 
     INTERVAL = "interval"
     WEEKDAYS = "weekdays"
+    HOURLY = "hourly"
 
 
 class StartMode(StrEnum):
@@ -60,7 +63,12 @@ class Schedule:
     start_time applies to TIME and is a local wall-clock time.
     sun_offset applies to SUNRISE/SUNSET: watering finishes this long before
     the event (negative = after it).
-    check_every_day makes every day an occurrence; see next_occurrence.
+    interval_hours/window_start/window_end apply to HOURLY: every day, runs at
+    window_start and every interval_hours after it while the start is no later
+    than window_end. The window can't cross midnight. HOURLY needs start_mode
+    TIME; start_time defaults to window_start.
+    check_every_day makes every day an occurrence (no effect for HOURLY); see
+    next_occurrence.
     """
 
     frequency: Frequency
@@ -71,6 +79,9 @@ class Schedule:
     start_time: time | None = None
     sun_offset: timedelta = timedelta(0)
     check_every_day: bool = False
+    interval_hours: int = 1
+    window_start: time | None = None
+    window_end: time | None = None
 
     def __post_init__(self) -> None:
         # Config entries store plain strings/lists; coerce so callers can pass
@@ -84,14 +95,29 @@ class Schedule:
                 raise ValueError("interval_days must be >= 1")
             if self.anchor is None:
                 raise ValueError("interval schedules need an anchor date")
-        else:
+        elif self.frequency is Frequency.WEEKDAYS:
             if not self.weekdays:
                 raise ValueError("weekday schedules need at least one weekday")
             if not all(0 <= day <= 6 for day in self.weekdays):
                 raise ValueError("weekdays must be 0 (Mon) through 6 (Sun)")
+        else:
+            self._validate_hourly()
 
         if self.start_mode is StartMode.TIME and self.start_time is None:
             raise ValueError("time schedules need a start_time")
+
+    def _validate_hourly(self) -> None:
+        # 24 h or more would be a daily schedule.
+        if not 1 <= self.interval_hours <= 23:
+            raise ValueError("interval_hours must be 1 through 23")
+        if self.window_start is None or self.window_end is None:
+            raise ValueError("hourly schedules need a window start and end")
+        if self.window_end <= self.window_start:
+            raise ValueError("window end must be after window start (it can't cross midnight)")
+        if self.start_mode is not StartMode.TIME:
+            raise ValueError("hourly schedules need start_mode time")
+        if self.start_time is None:
+            object.__setattr__(self, "start_time", self.window_start)
 
     @property
     def uses_sun(self) -> bool:
@@ -124,6 +150,8 @@ def runs_on(schedule: Schedule, day: date) -> bool:
         assert schedule.anchor is not None
         elapsed = (day - schedule.anchor).days
         return elapsed >= 0 and elapsed % schedule.interval_days == 0
+    if schedule.frequency is Frequency.HOURLY:
+        return True
     return day.weekday() in schedule.weekdays
 
 
@@ -138,6 +166,7 @@ def scheduled_start(
 
     A sun-based start can fall on an earlier calendar day than `day` when the
     run is long — `day` is the day watering finishes. Does not check runs_on.
+    For HOURLY this is the day's first start; see hourly_starts for the rest.
     """
     if schedule.start_mode is StartMode.TIME:
         assert schedule.start_time is not None
@@ -151,6 +180,28 @@ def scheduled_start(
     return start.replace(second=0, microsecond=0)
 
 
+def hourly_starts(schedule: Schedule, day: date, tz: tzinfo) -> list[datetime]:
+    """HOURLY start times on `day` (local date), earliest first.
+
+    Wall-clock slots every interval_hours from window_start while the slot is
+    no later than window_end, so the end is included only when a slot lands on
+    it exactly. A slot in a spring-forward gap moves past the jump like any
+    fixed time; if that puts it on the next slot's instant it is kept once.
+    """
+    assert schedule.window_start is not None and schedule.window_end is not None
+    step = timedelta(hours=schedule.interval_hours)
+    wall = datetime.combine(day, schedule.window_start)
+    end = datetime.combine(day, schedule.window_end)
+    starts: list[datetime] = []
+    while wall <= end:
+        start = _localize(wall, tz)
+        # Compare instants: same-tzinfo datetimes compare by wall clock.
+        if not starts or start.astimezone(UTC) > starts[-1].astimezone(UTC):
+            starts.append(start)
+        wall += step
+    return starts
+
+
 def next_occurrence(
     schedule: Schedule,
     after: datetime,
@@ -161,9 +212,10 @@ def next_occurrence(
     """First occurrence strictly after `after`, in `tz`.
 
     Without check_every_day this is the next scheduled run. With it, every day
-    is an occurrence and `scheduled` says whether that day is a schedule day.
-    Returns None if nothing is found within MAX_SEARCH_DAYS (only possible when
-    the sun event never occurs at this location).
+    is an occurrence and `scheduled` says whether that day is a schedule day
+    (HOURLY ignores it: every start is scheduled). Returns None if nothing is
+    found within MAX_SEARCH_DAYS (only possible when the sun event never occurs
+    at this location).
     """
     return _scan(
         schedule, after, run_duration, tz, sun_fn, every_day=schedule.check_every_day
@@ -210,11 +262,16 @@ def _scan(
     day = (after - lag).astimezone(tz).date() - timedelta(days=2)
 
     for _ in range(MAX_SEARCH_DAYS + lag.days + 3):
-        scheduled = runs_on(schedule, day)
-        if scheduled or every_day:
-            start = scheduled_start(schedule, day, run_duration, tz, sun_fn)
-            if start is not None and start > after:
-                return Occurrence(start, scheduled)
+        if schedule.frequency is Frequency.HOURLY:
+            for start in hourly_starts(schedule, day, tz):
+                if start > after:
+                    return Occurrence(start, True)
+        else:
+            scheduled = runs_on(schedule, day)
+            if scheduled or every_day:
+                start = scheduled_start(schedule, day, run_duration, tz, sun_fn)
+                if start is not None and start > after:
+                    return Occurrence(start, scheduled)
         day += timedelta(days=1)
     return None
 

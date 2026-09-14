@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -16,26 +20,22 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # Same pins as the local test environment. pytest-homeassistant-custom-component
+      # 0.13.205 pins homeassistant==2025.1.4, which pins aiohasupervisor==0.2.2b5;
+      # uv rejects that pre-release unless it's allowed.
+      - uses: ljmerza/misc-actions/actions/python-test@v2
         with:
-          # Matches the local test environment: pytest-homeassistant-custom-component
-          # 0.13.205 pins homeassistant==2025.1.4.
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: requirements_test.txt
-      - name: Install test dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements_test.txt
-      - name: Run tests
-        run: python -m pytest -q -p no:cacheprovider
+          requirements-file: requirements_test.txt
+          prerelease: allow
 
   lint:
     name: Ruff
     runs-on: ubuntu-latest
     # Not blocking yet: the code still has unsorted imports. Remove this line
-    # after running `ruff check --fix` once (see docs/hacs.md).
+    # after running `ruff check --fix` once (see docs/hacs.md). Kept as a local
+    # job because misc-actions' ruff-lint needs a uv.lock and also runs
+    # `ruff format --check`.
     continue-on-error: true
     steps:
       - name: Checkout
@@ -52,34 +52,18 @@ jobs:
   frontend:
     name: Panel bundle
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      # npm ci from frontend/package-lock.json, then `npm run build`.
+      - uses: ljmerza/misc-actions/actions/npm-build@v2
         with:
+          working-directory: frontend
           node-version: "22"
-      - name: Install dependencies
-        run: |
-          if [ -f package-lock.json ]; then
-            npm ci --no-audit --no-fund
-          else
-            echo "::warning::frontend/package-lock.json is missing; installing unpinned dependencies"
-            npm install --no-audit --no-fund
-          fi
+          pack: "false"
+          artifact-name: ""
       - name: Type check
+        working-directory: frontend
         run: npx tsc --noEmit
-      - name: Build
-        run: npm run build
       - name: Committed bundle matches the build
-        run: |
-          if [ ! -f package-lock.json ]; then
-            # Without a lockfile the dependency versions float, so a byte-for-byte
-            # comparison can fail for reasons unrelated to the source.
-            echo "::warning::Skipping bundle comparison until frontend/package-lock.json is committed"
-            exit 0
-          fi
-          git diff --exit-code -- ../custom_components/irrigation_manager/www/irrigation-manager-panel.js
+        run: git diff --exit-code -- custom_components/irrigation_manager/www/irrigation-manager-panel.js
