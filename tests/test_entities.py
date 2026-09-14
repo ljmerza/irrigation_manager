@@ -284,8 +284,8 @@ async def test_run_now_button_drives_run_sensors(
     last_run = hass.states.get(LAST_RUN)
     assert dt_util.parse_datetime(last_run.attributes["last_run_end"]) == local(2026, 9, 14, 5, 15)
     assert last_run.attributes["zone_results"] == [
-        {"entity_id": ZONE_A, "minutes": 10.0, "error": None},
-        {"entity_id": ZONE_B, "minutes": 5.0, "error": None},
+        {"entity_id": ZONE_A, "minutes": 10.0, "error": None, "stopped_by": "manager"},
+        {"entity_id": ZONE_B, "minutes": 5.0, "error": None, "stopped_by": "manager"},
     ]
 
 

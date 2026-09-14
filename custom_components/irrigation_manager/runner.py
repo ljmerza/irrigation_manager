@@ -3,8 +3,10 @@
 One ScheduleRunner per config entry. It schedules the next occurrence, asks
 conditions.async_decide whether to water, runs the zones through their drivers,
 and persists state so a Home Assistant restart mid-run closes any zone that was
-left open. Every zone gets an explicit stop at the end of its time, even when
-the device was also given a native duration.
+left open. A zone on a device that stops itself is given time to do so before
+the runner sends a stop; every stop is verified against the entity state, and
+a zone that still reads on is retried only after re-reading that state (a stop
+sent to an already-closed valve can start a new run on some firmware).
 
 It also owns the schedule's rain delay, pause flag, run/skip history and the
 irrigation_manager_event bus events, retries an occurrence while an occupancy
@@ -80,8 +82,12 @@ from .const import (
     MAX_RAIN_DELAY_HOURS,
     MAX_ZONE_MINUTES,
     MIN_ZONE_MINUTES,
+    NATIVE_STOP_GRACE_SECONDS,
+    NATIVE_STOP_SETTLE_SECONDS,
     OCCUPANCY_RETRY_SECONDS,
     SIGNAL_SCHEDULES_CHANGED,
+    STATE_POLL_SECONDS,
+    STOP_SETTLE_SECONDS,
     STORAGE_KEY_FMT,
     STORAGE_VERSION,
     EventType,
@@ -184,6 +190,9 @@ class ScheduleRunner:
         self._run_manual = False
         self._active_zones: dict[str, _ActiveZone] = {}
         self._waiters: set[asyncio.Future[bool]] = set()
+        # Post-stop verification waits: woken only by unload, not by a stop.
+        self._settle_waiters: set[asyncio.Future[bool]] = set()
+        self._last_stop_sent: dict[str, datetime] = {}
         self._stop_reason: Status | None = None
         self._stop_details: dict[str, Any] = {}
         self._busy_skipped = False
@@ -258,6 +267,10 @@ class ScheduleRunner:
     async def async_unload(self) -> None:
         """Cancel timers; stop an active run and record it as interrupted."""
         self._unloading = True
+        # Stop verifications finish with whatever the entity reads now.
+        for waiter in list(self._settle_waiters):
+            if not waiter.done():
+                waiter.set_result(False)
         self._cancel_timer()
         self._cancel_retry()
         self._cancel_rain_delay_timer()
@@ -320,19 +333,32 @@ class ScheduleRunner:
         self._notify()
 
     async def _async_close(self, entity_ids: list[str]) -> list[str]:
-        """Stop each zone; return the ones that failed.
+        """Stop each zone that still reads on; return the ones not known closed.
 
         Zones a run has opened since are skipped: that run closes them itself.
+        A zone whose state can't be read yet (its integration is still loading)
+        counts as not closed so it is retried later.
         """
         failed: list[str] = []
         for entity_id in entity_ids:
             if entity_id in self._active_zones:
                 continue
+            driver = async_get_driver(self.hass, entity_id)
+            seen = driver.is_on()
+            if seen is False:
+                continue
+            if seen is None:
+                failed.append(entity_id)
+                continue
             try:
-                await async_get_driver(self.hass, entity_id).async_stop()
+                seen = await self._async_send_stop(driver)
             except HomeAssistantError as err:
                 _LOGGER.warning("Stopping %s failed: %s", entity_id, err)
                 failed.append(entity_id)
+            else:
+                if seen is True:
+                    _LOGGER.error("%s still reads on after a stop", entity_id)
+                    failed.append(entity_id)
         return failed
 
     # --- scheduling -----------------------------------------------------------
@@ -603,13 +629,18 @@ class ScheduleRunner:
             self._active_zones.pop(entity_id, None)
             self._zone_results.append(_zone_result(entity_id, 0.0, str(err)))
             self._fire(EventType.ZONE_FINISHED, zone=entity_id, minutes=0.0, error=str(err))
-            # A failed or timed-out start may still have opened it.
-            try:
-                await driver.async_stop()
-            except HomeAssistantError:
-                if _is_available(self.hass, entity_id):
-                    # The start reached the device; keep retrying the close.
-                    self._add_unclosed([entity_id])
+            # A failed or timed-out start may still have opened it; only send a
+            # stop when the entity doesn't read off.
+            if driver.is_on() is not False:
+                try:
+                    seen = await self._async_send_stop(driver)
+                except HomeAssistantError:
+                    if _is_available(self.hass, entity_id):
+                        # The start reached the device; keep retrying the close.
+                        self._add_unclosed([entity_id])
+                else:
+                    if seen is True:
+                        self._add_unclosed([entity_id])
             await self._async_save()
             self._notify()
             return
@@ -620,8 +651,102 @@ class ScheduleRunner:
         await self._async_save()
         self._notify()
 
-        await self._async_wait_until(zone.ends_at)
-        await self._async_stop_zone(entity_id)
+        reached = await self._async_wait_until(zone.ends_at)
+        device_stopped_at = None
+        if reached and driver.native_duration:
+            # The device was given the duration and closes itself; a stop sent
+            # on top of that can start a new run on some firmware.
+            device_stopped_at = await self._async_wait_device_off(driver)
+        await self._async_stop_zone(entity_id, device_stopped_at=device_stopped_at)
+
+    async def _async_wait_device_off(self, driver: ZoneDriver) -> datetime | None:
+        """Give a native-duration device the chance to close itself.
+
+        With homeassistant.update_entity available: NATIVE_STOP_SETTLE_SECONDS
+        after the zone's end (the device's own timer started a little after
+        ours) ask for a fresh device read and check the entity; if it still
+        reads on, once more the same interval later. Without it, poll the
+        cached state every STATE_POLL_SECONDS for NATIVE_STOP_GRACE_SECONDS.
+
+        Returns when the entity was seen off, or None if it still reads on
+        (or can't be read) afterwards, or if the run was stopped meanwhile —
+        a stop is then sent.
+        """
+        if driver.can_refresh:
+            for _ in range(2):
+                settle = dt_util.utcnow() + timedelta(seconds=NATIVE_STOP_SETTLE_SECONDS)
+                if not await self._async_wait_until(settle):
+                    return None
+                await driver.async_refresh()
+                seen = driver.is_on()
+                if seen is False:
+                    return dt_util.utcnow()
+                if seen is None:
+                    _LOGGER.warning(
+                        "%s: state can't be read after its run time; treating it as on",
+                        driver.entity_id,
+                    )
+            return None
+
+        deadline = dt_util.utcnow() + timedelta(seconds=NATIVE_STOP_GRACE_SECONDS)
+        while True:
+            if driver.is_on() is False:
+                return dt_util.utcnow()
+            now = dt_util.utcnow()
+            if now >= deadline:
+                return None
+            poll = min(deadline, now + timedelta(seconds=STATE_POLL_SECONDS))
+            if not await self._async_wait_until(poll):
+                return None
+
+    async def _async_send_stop(self, driver: ZoneDriver) -> bool | None:
+        """Send one stop and verify it: False = entity reads off, True = still
+        on after STOP_SETTLE_SECONDS, None = couldn't be read. Raises
+        HomeAssistantError when the stop itself fails."""
+        self._last_stop_sent[driver.entity_id] = dt_util.utcnow()
+        await driver.async_stop()
+        return await self._async_verify_off(driver)
+
+    async def _async_verify_off(self, driver: ZoneDriver) -> bool | None:
+        """Read the entity right after a stop and again at STOP_SETTLE_SECONDS
+        (each preceded by a fresh device read when available), polling the
+        cached state in between. Unloading ends the wait early."""
+        deadline = dt_util.utcnow() + timedelta(seconds=STOP_SETTLE_SECONDS)
+        if not self._unloading:
+            await driver.async_refresh()
+        while True:
+            seen = driver.is_on()
+            if seen is False:
+                return False
+            now = dt_util.utcnow()
+            if self._unloading or now >= deadline:
+                return seen
+            remaining = (deadline - now).total_seconds()
+            if not await self._async_pause(min(STATE_POLL_SECONDS, remaining)):
+                return driver.is_on()
+            if dt_util.utcnow() >= deadline:
+                await driver.async_refresh()
+
+    async def _async_pause(self, seconds: float) -> bool:
+        """Wait `seconds`; False when unloading, which ends the wait early."""
+        if self._unloading:
+            return False
+        waiter: asyncio.Future[bool] = self.hass.loop.create_future()
+
+        @callback
+        def _reached(_now: datetime) -> None:
+            if not waiter.done():
+                waiter.set_result(True)
+
+        unsub = async_track_point_in_time(
+            self.hass, _reached, dt_util.utcnow() + timedelta(seconds=seconds)
+        )
+        self._settle_waiters.add(waiter)
+        try:
+            return await waiter
+        finally:
+            unsub()
+            self._settle_waiters.discard(waiter)
 
     async def _async_wait_until(self, when: datetime) -> bool:
         """Wait until `when`; return False early if the run is being stopped."""
@@ -642,16 +767,38 @@ class ScheduleRunner:
             unsub()
             self._waiters.discard(waiter)
 
-    async def _async_stop_zone(self, entity_id: str) -> None:
+    async def _async_stop_zone(
+        self, entity_id: str, *, device_stopped_at: datetime | None = None
+    ) -> None:
+        """End a zone: send a stop unless the device already closed itself
+        (`device_stopped_at`), and verify the result against the entity."""
         zone = self._active_zones.get(entity_id)
         if zone is None:
             return
         error: str | None = None
-        try:
-            await zone.driver.async_stop()
-        except HomeAssistantError as err:
-            _LOGGER.error("Stopping %s failed: %s", entity_id, err)
-            error = str(err)
+        stopped_by: str | None = None
+        if device_stopped_at is not None:
+            stopped_by = "device"
+            end = device_stopped_at
+        else:
+            try:
+                seen = await self._async_send_stop(zone.driver)
+            except HomeAssistantError as err:
+                _LOGGER.error("Stopping %s failed: %s", entity_id, err)
+                error = str(err)
+            else:
+                if seen is True:
+                    error = "still on after stop"
+                    _LOGGER.error("%s still reads on after a stop", entity_id)
+                elif seen is None:
+                    stopped_by = "unverified"
+                    _LOGGER.warning(
+                        "%s: stop sent but its state can't be read; assuming it closed",
+                        entity_id,
+                    )
+                else:
+                    stopped_by = "manager"
+            end = dt_util.utcnow()
         # Only forget the zone once the stop was attempted, so a crash during
         # the stop call still closes it on recovery. A failed stop hands the
         # zone to the unclosed-zone retries, which are persisted too.
@@ -660,8 +807,8 @@ class ScheduleRunner:
             self._add_unclosed([entity_id])
         minutes = 0.0
         if zone.started is not None:
-            minutes = round((dt_util.utcnow() - zone.started).total_seconds() / 60, 1)
-        self._zone_results.append(_zone_result(entity_id, minutes, error))
+            minutes = round((end - zone.started).total_seconds() / 60, 1)
+        self._zone_results.append(_zone_result(entity_id, minutes, error, stopped_by))
         self._fire(EventType.ZONE_FINISHED, zone=entity_id, minutes=minutes, error=error)
         await self._async_save()
         self._notify()
@@ -886,10 +1033,16 @@ class ScheduleRunner:
             self._unsub_unclosed_state()
             self._unsub_unclosed_state = None
 
-    async def _async_unclosed_timer(self, _now: datetime) -> None:
+    @callback
+    def _async_unclosed_timer(self, _now: datetime) -> None:
         self._unsub_unclosed_timer = None
         self._unclosed_attempt += 1
-        await self._async_close_unclosed(sorted(self._unclosed))
+        # A retry can wait STOP_SETTLE_SECONDS verifying its stop; don't hold
+        # the timer callback for that.
+        self._unclosed_task = self.hass.async_create_background_task(
+            self._async_close_unclosed(sorted(self._unclosed), retry=True),
+            name=f"{DOMAIN} close {self.entry.entry_id}",
+        )
 
     @callback
     def _handle_unclosed_state(self, event: Event) -> None:
@@ -906,12 +1059,20 @@ class ScheduleRunner:
         ):
             return
         self.hass.async_create_background_task(
-            self._async_close_unclosed([entity_id]),
+            self._async_close_unclosed([entity_id], retry=True),
             name=f"{DOMAIN} close {entity_id}",
         )
 
-    async def _async_close_unclosed(self, entity_ids: list[str]) -> None:
-        """Try again to close zones left open; re-arm retries for any still open."""
+    async def _async_close_unclosed(
+        self, entity_ids: list[str], *, retry: bool = False
+    ) -> None:
+        """Try again to close zones left open; re-arm retries for any still open.
+
+        The entity state is read first: a zone that reads off is done without
+        a command, one that can't be read is left for the next attempt. `retry`
+        (timer / entity-back triggers) also skips a zone stopped within the
+        last STOP_SETTLE_SECONDS, so two stops are never sent back to back.
+        """
         closed: list[str] = []
         for entity_id in entity_ids:
             if (
@@ -920,9 +1081,24 @@ class ScheduleRunner:
                 or entity_id in self._active_zones
             ):
                 continue
+            driver = async_get_driver(self.hass, entity_id)
+            seen = driver.is_on()
+            if seen is False:
+                _LOGGER.info("%s: %s closed on its own", self.entry.title, entity_id)
+                closed.append(entity_id)
+                continue
+            if seen is None:
+                continue
+            last = self._last_stop_sent.get(entity_id)
+            if (
+                retry
+                and last is not None
+                and dt_util.utcnow() - last < timedelta(seconds=STOP_SETTLE_SECONDS)
+            ):
+                continue
             self._closing.add(entity_id)
             try:
-                await async_get_driver(self.hass, entity_id).async_stop()
+                seen = await self._async_send_stop(driver)
             except HomeAssistantError as err:
                 _LOGGER.error(
                     "%s: %s may still be open; closing it failed again: %s",
@@ -931,7 +1107,12 @@ class ScheduleRunner:
                     err,
                 )
             else:
-                closed.append(entity_id)
+                if seen is True:
+                    _LOGGER.error(
+                        "%s: %s still reads on after a stop", self.entry.title, entity_id
+                    )
+                else:
+                    closed.append(entity_id)
             finally:
                 self._closing.discard(entity_id)
         if closed:
@@ -1400,8 +1581,17 @@ def _parse(value: Any) -> datetime | None:
     return dt_util.parse_datetime(value) if isinstance(value, str) else None
 
 
-def _zone_result(entity_id: str, minutes: float, error: str | None) -> dict[str, Any]:
-    return {"entity_id": entity_id, "minutes": minutes, "error": error}
+def _zone_result(
+    entity_id: str, minutes: float, error: str | None, stopped_by: str | None = None
+) -> dict[str, Any]:
+    """stopped_by: "device" (closed itself, no stop sent), "manager" (our stop,
+    verified off), "unverified" (our stop, state unreadable), or None (error)."""
+    return {
+        "entity_id": entity_id,
+        "minutes": minutes,
+        "error": error,
+        "stopped_by": stopped_by,
+    }
 
 
 def _skip_record(status: Status, details: Mapping[str, Any]) -> dict[str, Any]:

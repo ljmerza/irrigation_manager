@@ -297,3 +297,19 @@ MAX_INTERVAL_HOURS: Final = 23
 DEFAULT_INTERVAL_HOURS: Final = 3
 DEFAULT_WINDOW_START: Final = "06:00:00"
 DEFAULT_WINDOW_END: Final = "18:00:00"
+
+# --- stop verification -----------------------------------------------------
+# A native-duration device closes itself at the end of its run (some firmware
+# also ignores the requested duration, and a stop sent to an already-closed
+# valve can start a new run). At the end of a zone the runner asks the entity's
+# integration for a fresh device read (homeassistant.update_entity) this long
+# after the zone's end, and once more the same interval later, before it sends
+# a stop of its own.
+NATIVE_STOP_SETTLE_SECONDS: Final = 10
+# Without homeassistant.update_entity the entity state is polled every
+# STATE_POLL_SECONDS instead, for at most NATIVE_STOP_GRACE_SECONDS.
+NATIVE_STOP_GRACE_SECONDS: Final = 30
+STATE_POLL_SECONDS: Final = 5
+# After a stop, how long to wait for the entity to read off before treating
+# the close as failed. Also the minimum gap between two retried stops.
+STOP_SETTLE_SECONDS: Final = 15

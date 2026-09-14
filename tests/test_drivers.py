@@ -286,3 +286,51 @@ async def test_device_entity_ignores_entities_without_a_device(hass: HomeAssista
     entity_id = register(hass, "valve", "orbit_bhyve", "loose", "closed")
     assert device_entity(hass, entity_id, "number", "orbit_bhyve", ORBIT_BHYVE_RAIN_DELAY_SUFFIX) is None
     assert device_entity(hass, "valve.unknown", "number", "orbit_bhyve", ORBIT_BHYVE_RAIN_DELAY_SUFFIX) is None
+
+
+# --- entity state reads -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("domain", "state", "expected"),
+    [
+        ("valve", "open", True),
+        ("valve", "opening", True),
+        ("valve", "closed", False),
+        ("valve", "closing", False),
+        ("valve", "unknown", None),
+        ("valve", "unavailable", None),
+        ("switch", "on", True),
+        ("switch", "off", False),
+        ("switch", "unavailable", None),
+    ],
+)
+async def test_is_on_reads_the_entity_state(
+    hass: HomeAssistant, domain: str, state: str, expected: bool | None
+) -> None:
+    hass.states.async_set(f"{domain}.zone", state)
+    assert async_get_driver(hass, f"{domain}.zone").is_on() is expected
+
+
+async def test_is_on_is_none_for_a_missing_entity(hass: HomeAssistant) -> None:
+    assert async_get_driver(hass, "valve.missing").is_on() is None
+
+
+async def test_refresh_asks_home_assistant_for_a_fresh_read(hass: HomeAssistant) -> None:
+    hass.states.async_set("valve.zone", "open")
+    driver = async_get_driver(hass, "valve.zone")
+    assert not driver.can_refresh
+    await driver.async_refresh()  # no-op without the service
+
+    updates = async_mock_service(hass, "homeassistant", "update_entity")
+    assert driver.can_refresh
+    await driver.async_refresh()
+    assert [call.data for call in updates] == [{"entity_id": ["valve.zone"]}]
+
+
+async def test_refresh_failure_is_ignored(hass: HomeAssistant) -> None:
+    hass.states.async_set("valve.zone", "open")
+    async_mock_service(
+        hass, "homeassistant", "update_entity", raise_exception=HomeAssistantError("busy")
+    )
+    await async_get_driver(hass, "valve.zone").async_refresh()  # does not raise

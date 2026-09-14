@@ -109,9 +109,14 @@ Core `valve.open_valve` and `switch.turn_on` take no duration, so the integratio
 | `rachio_local` | `rachio_local.turn_on` (seconds) | yes |
 | anything else | `valve.open_valve` / `switch.turn_on` | no |
 
-Every zone also gets an explicit close/turn-off when its time is up. Active zones are closed when Home Assistant shuts down, and a run interrupted by a restart has its zones closed on the next start.
+When a zone's time is up, what happens depends on the driver:
 
-If a close fails, the zone stays on the schedule's list of unclosed zones and closing is retried: when the entity becomes available again, after 1, 5 and 15 minutes, then every 15 minutes. The list survives a restart. Before a run opens a zone that is still unclosed it tries to close it; if that fails, the zone is not started. The **Problem** binary sensor and a red banner in the panel show unclosed zones.
+- **Device stops itself:** the integration does not send a close right away, because some firmware treats a close of an already-closed valve as a new run. 10 seconds after the zone's end it asks Home Assistant for a fresh device read (`homeassistant.update_entity`) and checks the entity; if it still reads open, it checks once more 10 seconds later, and only then sends a close. Without `homeassistant.update_entity` it polls the entity state every 5 seconds for up to 30 seconds instead. A zone that closed on its own is recorded with `stopped_by: device` in the run's zone results.
+- **Anything else:** a close/turn-off is sent when the time is up.
+
+Every close is verified against the entity state (with a fresh device read when available): the zone counts as closed only when the entity reads closed/off within 15 seconds. A zone that still reads open is treated as a failed close. A manual stop, a stop for rain or occupancy, a shutdown and a restart recovery send a close too, verified the same way — but never to a zone that already reads closed. Active zones are closed when Home Assistant shuts down, and a run interrupted by a restart has its zones closed on the next start.
+
+If a close fails or the zone still reads open, the zone stays on the schedule's list of unclosed zones and closing is retried: when the entity becomes available again, after 1, 5 and 15 minutes, then every 15 minutes. Each retry reads the entity first: a zone that now reads closed is taken off the list without a command, and two closes are never sent within 15 seconds of each other. The list survives a restart. Before a run opens a zone that is still unclosed it tries to close it; if that fails, the zone is not started. The **Problem** binary sensor and a red banner in the panel show unclosed zones.
 
 Zones on the same Rachio controller can't run concurrently — Rachio stops the other zones when one starts.
 

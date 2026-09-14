@@ -2,9 +2,9 @@
 
 Core `valve.open_valve` and `switch.turn_on` take no duration, so integrations
 that support one expose their own service. A driver is picked per entity from
-its entity registry platform. Native-duration devices also shut off on their
-own if Home Assistant goes away mid-run; the runner still calls async_stop at
-the end of every zone.
+its entity registry platform. Native-duration devices shut off on their own at
+the end of the duration; the runner waits for that before sending a stop of
+its own, and reads the entity state (is_on) to verify every stop.
 
 Drivers can also copy a schedule's rain delay to devices that have one.
 """
@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
-from homeassistant.const import ATTR_ENTITY_ID, STATE_UNAVAILABLE
+from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import entity_registry as er
@@ -27,6 +27,11 @@ _LOGGER = logging.getLogger(__name__)
 ORBIT_BHYVE_MAX_SECONDS = 65535
 # orbit_bhyve's rain delay number (hours, 0 clears) has unique_id "<device>_rain_delay".
 ORBIT_BHYVE_RAIN_DELAY_SUFFIX = "_rain_delay"
+
+# Valve states (homeassistant.components.valve.ValveState) as plain strings so
+# the driver doesn't import the valve component.
+_VALVE_ON_STATES = ("open", "opening")
+_VALVE_OFF_STATES = ("closed", "closing")
 
 
 class ZoneDriver:
@@ -48,6 +53,48 @@ class ZoneDriver:
         """Turn the zone off."""
         service = "close_valve" if self.domain == "valve" else "turn_off"
         await self._async_call(self.domain, service)
+
+    @property
+    def can_refresh(self) -> bool:
+        """Whether homeassistant.update_entity is available for a fresh device read."""
+        return self.hass.services.has_service("homeassistant", "update_entity")
+
+    async def async_refresh(self) -> None:
+        """Ask the entity's integration for a fresh device read, when HA offers it.
+
+        Native-duration devices are polled slowly, so the cached state can lag
+        the device by a minute; a read makes is_on() reflect the device now.
+        Failures are logged and ignored — the cached state is used instead.
+        """
+        if not self.can_refresh:
+            return
+        try:
+            await self.hass.services.async_call(
+                "homeassistant",
+                "update_entity",
+                {ATTR_ENTITY_ID: [self.entity_id]},
+                blocking=True,
+            )
+        except Exception as err:  # noqa: BLE001 — best effort
+            _LOGGER.debug("%s: update_entity failed: %s", self.entity_id, err)
+
+    @callback
+    def is_on(self) -> bool | None:
+        """Whether the entity currently reads on/open; None when it can't be read."""
+        state = self.hass.states.get(self.entity_id)
+        if state is None:
+            return None
+        if self.domain == "valve":
+            if state.state in _VALVE_ON_STATES:
+                return True
+            if state.state in _VALVE_OFF_STATES:
+                return False
+            return None
+        if state.state == STATE_ON:
+            return True
+        if state.state == STATE_OFF:
+            return False
+        return None
 
     async def async_set_rain_delay(self, hours: float) -> None:
         """Copy a schedule rain delay to the device; 0 clears it.

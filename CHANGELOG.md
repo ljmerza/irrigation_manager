@@ -36,6 +36,7 @@ Adds rain and weather conditions, automations and API, AI reports, and migration
 - Saving a schedule from the options flow stores `rain_sensors` / `weather_entities` lists in place of the single `rain_sensor` / `weather_entity`. Schedules that aren't edited keep working unchanged.
 
 ### Fixed
+- A zone on a device that stops itself (B-Hyve, Rachio) was also sent a close when its time was up. On B-Hyve HT25A fw0098 that close starts a new 30-minute run, so a 30-minute schedule watered for an hour. The close is now sent only if a fresh device read still shows the zone open 10 and 20 seconds after its end; every close is verified against the entity state, and retries for a zone left open read the entity first and never send two closes within 15 seconds.
 - A zone whose close failed at the end of its time was forgotten and never closed again. It is now kept on a persisted list and retried until it closes.
 - Entering a non-number in a whole-number setup field crashed the step; it now shows an error.
 

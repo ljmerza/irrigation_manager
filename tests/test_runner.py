@@ -19,7 +19,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import EVENT_CORE_CONFIG_UPDATE, EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CoreState, HomeAssistant, ServiceCall, callback
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, event as event_helper
+from homeassistant.helpers import device_registry as dr, entity_registry as er, event as event_helper
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
@@ -78,8 +78,8 @@ ZONE_A = "valve.zone_a"
 ZONE_B = "switch.zone_b"
 
 
-def local(y: int, mo: int, d: int, h: int = 0, mi: int = 0) -> datetime:
-    return datetime(y, mo, d, h, mi, tzinfo=TZ)
+def local(y: int, mo: int, d: int, h: int = 0, mi: int = 0, sec: int = 0) -> datetime:
+    return datetime(y, mo, d, h, mi, sec, tzinfo=TZ)
 
 
 def make_config(**overrides: Any) -> dict[str, Any]:
@@ -103,7 +103,7 @@ def make_config(**overrides: Any) -> dict[str, Any]:
 
 async def settle(hass: HomeAssistant) -> None:
     """Let background run tasks and blocking service calls progress."""
-    for _ in range(20):
+    for _ in range(40):
         await hass.async_block_till_done()
         await asyncio.sleep(0)
 
@@ -310,8 +310,8 @@ async def test_sequential_run_waters_each_zone_in_turn(
     assert runner.last_run_end == local(2026, 9, 14, 6, 15)
     assert runner.last_run_total_minutes == 15.0
     assert runner.zone_results == [
-        {"entity_id": ZONE_A, "minutes": 10.0, "error": None},
-        {"entity_id": ZONE_B, "minutes": 5.0, "error": None},
+        {"entity_id": ZONE_A, "minutes": 10.0, "error": None, "stopped_by": "manager"},
+        {"entity_id": ZONE_B, "minutes": 5.0, "error": None, "stopped_by": "manager"},
     ]
     assert runner.snapshot()["next_run"] == local(2026, 9, 15, 6).isoformat()
 
@@ -531,7 +531,9 @@ async def test_stop_mid_run_closes_zone_and_skips_the_rest(
     assert not runner.running
     assert runner.status is Status.IDLE
     assert runner.last_run_total_minutes == 3.0
-    assert runner.zone_results == [{"entity_id": ZONE_A, "minutes": 3.0, "error": None}]
+    assert runner.zone_results == [
+        {"entity_id": ZONE_A, "minutes": 3.0, "error": None, "stopped_by": "manager"}
+    ]
     assert runner.snapshot()["next_run"] == local(2026, 9, 14, 6).isoformat()
 
 
@@ -539,9 +541,10 @@ async def test_zone_start_failure_moves_on_and_ends_in_error(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
 ) -> None:
     opened = async_mock_service(hass, "valve", "open_valve", raise_exception=HomeAssistantError("boom"))
-    closed = async_mock_service(hass, "valve", "close_valve")
+    closed = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
     on = async_mock_service(hass, "switch", "turn_on")
     off = async_mock_service(hass, "switch", "turn_off")
+    hass.states.async_set(ZONE_A, "open")  # the failed start reached the device
 
     runner = await make_runner()
     await runner.async_run_now()
@@ -668,16 +671,20 @@ def seed_active_run(hass_storage: dict[str, Any], entry: MockConfigEntry, zones:
 
 
 async def test_restart_recovery_closes_open_zones(
-    hass: HomeAssistant, hass_storage: dict[str, Any], calls, decide, make_runner
+    hass: HomeAssistant, hass_storage: dict[str, Any], decide, make_runner
 ) -> None:
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+    offs = flaky_service(hass, "switch", "turn_off", 0, sets="off")
+    hass.states.async_set(ZONE_A, "open")
+    hass.states.async_set(ZONE_B, "on")
     entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config())
     entry.add_to_hass(hass)
     seed_active_run(hass_storage, entry, [ZONE_A, ZONE_B])
 
     runner = await make_runner(entry=entry)
 
-    assert [call.data["entity_id"] for call in calls["close"]] == [ZONE_A]
-    assert [call.data["entity_id"] for call in calls["off"]] == [ZONE_B]
+    assert [call.data["entity_id"] for call in closes] == [ZONE_A]
+    assert [call.data["entity_id"] for call in offs] == [ZONE_B]
     assert runner.status is Status.INTERRUPTED
     assert not runner.running
     assert runner.last_run_start == local(2026, 9, 14, 4, 50)
@@ -687,9 +694,26 @@ async def test_restart_recovery_closes_open_zones(
     assert runner.snapshot()["next_run"] == local(2026, 9, 14, 6).isoformat()
 
 
-async def test_recovery_retries_once_home_assistant_has_started(
+async def test_restart_recovery_sends_nothing_to_zones_that_read_off(
     hass: HomeAssistant, hass_storage: dict[str, Any], calls, decide, make_runner
 ) -> None:
+    entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config())
+    entry.add_to_hass(hass)
+    seed_active_run(hass_storage, entry, [ZONE_A, ZONE_B])  # both read closed/off
+
+    runner = await make_runner(entry=entry)
+
+    assert not calls["close"]
+    assert not calls["off"]
+    assert runner.status is Status.INTERRUPTED
+    assert runner.unclosed_zones == []
+    assert hass_storage[storage_key(entry)]["data"]["active_run"] is None
+
+
+async def test_recovery_retries_once_home_assistant_has_started(
+    hass: HomeAssistant, hass_storage: dict[str, Any], decide, make_runner
+) -> None:
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
     entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config())
     entry.add_to_hass(hass)
     seed_active_run(hass_storage, entry, [ZONE_A])
@@ -697,7 +721,7 @@ async def test_recovery_retries_once_home_assistant_has_started(
     hass.set_state(CoreState.starting)
 
     runner = await make_runner(entry=entry)
-    assert not calls["close"]
+    assert not closes
     assert hass_storage[storage_key(entry)]["data"]["active_run"] is not None
 
     hass.states.async_set(ZONE_A, "open")
@@ -705,7 +729,7 @@ async def test_recovery_retries_once_home_assistant_has_started(
     hass.bus.async_fire(EVENT_HOMEASSISTANT_STARTED)
     await settle(hass)
 
-    assert len(calls["close"]) == 1
+    assert len(closes) == 1
     assert "unclosed_zones" not in runner.last_details
     assert hass_storage[storage_key(entry)]["data"]["active_run"] is None
 
@@ -1098,17 +1122,59 @@ ONE_ZONE = {CONF_ZONES: [{CONF_ZONE_ENTITY: ZONE_A, CONF_ZONE_MINUTES: 10}]}
 
 
 def flaky_service(
-    hass: HomeAssistant, domain: str, service: str, failures: int
+    hass: HomeAssistant, domain: str, service: str, failures: int, sets: str | None = None
 ) -> list[ServiceCall]:
-    """A service that raises HomeAssistantError for its first `failures` calls."""
+    """A service that raises HomeAssistantError for its first `failures` calls.
+
+    `sets` is the state the targeted entities take when a call succeeds (what
+    a real integration does after the device confirms); the mocked services
+    from the `calls` fixture never change state.
+    """
     received: list[ServiceCall] = []
 
     async def _handle(call: ServiceCall) -> None:
         received.append(call)
         if len(received) <= failures:
             raise HomeAssistantError("stuck")
+        if sets is not None:
+            ids = call.data["entity_id"]
+            for entity_id in ids if isinstance(ids, list) else [ids]:
+                hass.states.async_set(entity_id, sets)
 
     hass.services.async_register(domain, service, _handle)
+    return received
+
+
+NATIVE = "valve.native_zone"
+NATIVE_ZONE = {CONF_ZONES: [{CONF_ZONE_ENTITY: NATIVE, CONF_ZONE_MINUTES: 10}]}
+
+
+def native_zone(hass: HomeAssistant) -> None:
+    """NATIVE registered under orbit_bhyve (a native-duration driver), reading closed.
+
+    orbit_bhyve.start_watering marks it open; valve.close_valve is registered
+    by each test with the behaviour it needs.
+    """
+    entry = er.async_get(hass).async_get_or_create(
+        "valve", "orbit_bhyve", "orbit_bhyve-native", suggested_object_id="native_zone"
+    )
+    assert entry.entity_id == NATIVE
+    hass.states.async_set(NATIVE, "closed")
+    flaky_service(hass, "orbit_bhyve", "start_watering", 0, sets="open")
+
+
+def device_reads(hass: HomeAssistant, device: dict[str, str]) -> list[ServiceCall]:
+    """homeassistant.update_entity that copies the real device state (`device`,
+    mutable) into the entity, like an integration's fresh device read."""
+    received: list[ServiceCall] = []
+
+    async def _handle(call: ServiceCall) -> None:
+        received.append(call)
+        for entity_id in call.data["entity_id"]:
+            if entity_id in device:
+                hass.states.async_set(entity_id, device[entity_id])
+
+    hass.services.async_register("homeassistant", "update_entity", _handle)
     return received
 
 
@@ -1130,8 +1196,8 @@ async def test_failed_zone_close_is_retried_until_it_closes(
     subscriptions,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    async_mock_service(hass, "valve", "open_valve")
-    closes = flaky_service(hass, "valve", "close_valve", failures=2)
+    flaky_service(hass, "valve", "open_valve", 0, sets="open")
+    closes = flaky_service(hass, "valve", "close_valve", failures=2, sets="closed")
 
     runner = await make_runner(make_config(**ONE_ZONE))
     await runner.async_run_now()
@@ -1170,7 +1236,7 @@ async def test_unclosed_zone_is_closed_when_its_entity_comes_back(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner, subscriptions
 ) -> None:
     async_mock_service(hass, "valve", "open_valve")
-    closes = async_mock_service(hass, "valve", "close_valve")
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
 
     runner = await make_runner(make_config(**ONE_ZONE))
     await runner.async_run_now()
@@ -1181,6 +1247,7 @@ async def test_unclosed_zone_is_closed_when_its_entity_comes_back(
     assert not closes  # drivers refuse an unavailable entity
     assert runner.unclosed_zones == [ZONE_A]
 
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 30))
     hass.states.async_set(ZONE_A, "open")  # back, well before the 1 min retry
     await settle(hass)
     assert len(closes) == 1
@@ -1195,8 +1262,8 @@ async def test_unclosed_zones_survive_a_restart(
     decide,
     make_runner,
 ) -> None:
-    async_mock_service(hass, "valve", "open_valve")
-    closes = flaky_service(hass, "valve", "close_valve", failures=2)
+    flaky_service(hass, "valve", "open_valve", 0, sets="open")
+    closes = flaky_service(hass, "valve", "close_valve", failures=2, sets="closed")
     entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config(**ONE_ZONE))
     entry.add_to_hass(hass)
 
@@ -1217,8 +1284,10 @@ async def test_unclosed_zones_survive_a_restart(
 
 
 async def test_v01_unclosed_zones_in_details_are_retried(
-    hass: HomeAssistant, hass_storage: dict[str, Any], calls, decide, make_runner
+    hass: HomeAssistant, hass_storage: dict[str, Any], decide, make_runner
 ) -> None:
+    offs = flaky_service(hass, "switch", "turn_off", 0, sets="off")
+    hass.states.async_set(ZONE_B, "on")
     entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config())
     entry.add_to_hass(hass)
     seed_store(
@@ -1229,7 +1298,7 @@ async def test_v01_unclosed_zones_in_details_are_retried(
 
     runner = await make_runner(entry=entry)
 
-    assert [call.data["entity_id"] for call in calls["off"]] == [ZONE_B]
+    assert [call.data["entity_id"] for call in offs] == [ZONE_B]
     assert runner.unclosed_zones == []
     assert "unclosed_zones" not in runner.last_details
 
@@ -1237,7 +1306,7 @@ async def test_v01_unclosed_zones_in_details_are_retried(
 async def test_unload_cancels_unclosed_zone_retries(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner, subscriptions
 ) -> None:
-    async_mock_service(hass, "valve", "open_valve")
+    flaky_service(hass, "valve", "open_valve", 0, sets="open")
     closes = flaky_service(hass, "valve", "close_valve", failures=100)
 
     runner = await make_runner(make_config(**ONE_ZONE))
@@ -1265,9 +1334,12 @@ async def test_run_closes_an_unclosed_zone_before_watering_it(
 ) -> None:
     opens = async_mock_service(hass, "valve", "open_valve")
     # Fails the startup retry; then fails again or succeeds before watering.
-    closes = flaky_service(hass, "valve", "close_valve", failures=100 if still_stuck else 1)
+    closes = flaky_service(
+        hass, "valve", "close_valve", failures=100 if still_stuck else 1, sets="closed"
+    )
     ons = async_mock_service(hass, "switch", "turn_on")
     async_mock_service(hass, "switch", "turn_off")
+    hass.states.async_set(ZONE_A, "open")  # left open by the earlier failure
     entry = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=make_config())
     entry.add_to_hass(hass)
     seed_store(hass_storage, entry, {"enabled": True, "unclosed_zones": [ZONE_A]})
@@ -1473,7 +1545,9 @@ async def test_run_zone_waters_one_zone(
     assert not runner.running
     record = runner.history()[0]
     assert record["manual"] is True
-    assert record["zones"] == [{"entity_id": ZONE_B, "minutes": 3.0, "error": None}]
+    assert record["zones"] == [
+        {"entity_id": ZONE_B, "minutes": 3.0, "error": None, "stopped_by": "manager"}
+    ]
 
 
 async def test_evaluate_reports_decision_without_side_effects(
@@ -1544,8 +1618,8 @@ async def test_history_records_runs_and_skips_and_persists(
             "manual": True,
             "started": local(2026, 9, 14, 5).isoformat(),
             "zones": [
-                {"entity_id": ZONE_A, "minutes": 10.0, "error": None},
-                {"entity_id": ZONE_B, "minutes": 5.0, "error": None},
+                {"entity_id": ZONE_A, "minutes": 10.0, "error": None, "stopped_by": "manager"},
+                {"entity_id": ZONE_B, "minutes": 5.0, "error": None, "stopped_by": "manager"},
             ],
             "total_minutes": 15.0,
             "details": {"manual": True},
@@ -1645,3 +1719,254 @@ async def test_busy_skip_is_recorded_as_event_and_history(
     skipped = [event.data for event in events if event.data["type"] == "skipped"]
     assert skipped[0]["status"] == "skipped_busy"
     assert runner.history()[0]["status"] == "skipped_busy"
+
+
+# --- end of zone: devices that stop themselves --------------------------------------
+
+
+async def test_native_zone_closed_by_device_gets_no_stop(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    """The device closes itself at its end; the fresh read 10 s later sees that."""
+    native_zone(hass)
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+    device = {NATIVE: "open"}
+    reads = device_reads(hass, device)
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    assert hass.states.get(NATIVE).state == "open"
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    assert runner.running
+    assert not reads and not closes
+    device[NATIVE] = "closed"  # closed itself; the cached state still reads open
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 10))
+
+    assert not runner.running
+    assert [call.data["entity_id"] for call in reads] == [[NATIVE]]
+    assert not closes
+    assert runner.status is Status.IDLE
+    assert runner.zone_results == [
+        {"entity_id": NATIVE, "minutes": 10.2, "error": None, "stopped_by": "device"}
+    ]
+    assert runner.last_run_total_minutes == 10.2
+
+
+async def test_native_zone_off_at_the_second_read_gets_no_stop(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+    device = {NATIVE: "open"}
+    reads = device_reads(hass, device)
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 10))
+    assert len(reads) == 1
+    assert runner.running
+    device[NATIVE] = "closed"
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 20))
+
+    assert len(reads) == 2
+    assert not closes
+    assert not runner.running
+    assert runner.zone_results[0]["stopped_by"] == "device"
+    assert runner.zone_results[0]["minutes"] == 10.3
+
+
+async def test_native_zone_still_on_after_both_reads_gets_one_verified_stop(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)
+    device = {NATIVE: "open"}
+    reads = device_reads(hass, device)
+
+    async def _close(call: ServiceCall) -> None:
+        device[NATIVE] = "closed"  # the device confirms; the read reflects it
+
+    closes = async_mock_service(hass, "valve", "close_valve")
+    hass.services.async_register("valve", "close_valve", _close)
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 20))
+
+    assert device[NATIVE] == "closed"  # exactly one stop went out
+    assert len(reads) == 3  # two end-of-zone reads, one after the stop
+    assert not runner.running
+    assert runner.status is Status.IDLE
+    assert runner.zone_results == [
+        {"entity_id": NATIVE, "minutes": 10.3, "error": None, "stopped_by": "manager"}
+    ]
+    del closes
+
+
+async def test_native_zone_stop_that_leaves_it_on_is_retried_only_when_it_reads_on(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    decide,
+    make_runner,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    native_zone(hass)
+    device = {NATIVE: "open"}
+    device_reads(hass, device)
+    closes = async_mock_service(hass, "valve", "close_valve")  # never closes it
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 20))
+    assert len(closes) == 1
+    assert runner.running  # verifying the stop
+    hass.states.async_set(NATIVE, "open", {"poked": True})  # a state event mid-settle
+    await settle(hass)
+    assert len(closes) == 1
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 40))  # settle time is up
+    assert not runner.running
+    assert len(closes) == 1
+    assert runner.status is Status.ERROR
+    assert runner.unclosed_zones == [NATIVE]
+    assert runner.zone_results[0]["error"] == "still on after stop"
+    assert runner.zone_results[0]["stopped_by"] is None
+
+    device[NATIVE] = "closed"
+    hass.states.async_set(NATIVE, "closed")  # a routine poll caught up meanwhile
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 11, 40))  # the 1 min retry
+    assert len(closes) == 1  # reads off: cleared without a command
+    assert runner.unclosed_zones == []
+    assert f"{NATIVE} closed on its own" in caplog.text
+
+
+async def test_unclosed_zone_that_still_reads_on_gets_another_stop_at_the_retry(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)
+    device = {NATIVE: "open"}
+    device_reads(hass, device)
+    closes = async_mock_service(hass, "valve", "close_valve")
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    for when in ((5, 10), (5, 10, 10), (5, 10, 20), (5, 10, 40)):
+        await advance_to(hass, freezer, local(2026, 9, 14, *when))
+    assert len(closes) == 1
+    assert runner.unclosed_zones == [NATIVE]
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 11, 40))
+    assert len(closes) == 2  # still on: one more stop
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 12))
+    assert len(closes) == 2  # and nothing more until the next retry
+    assert runner.unclosed_zones == [NATIVE]
+
+
+async def test_manual_stop_on_native_zone_sends_one_verified_stop(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)
+    device = {NATIVE: "open"}
+    reads = device_reads(hass, device)
+
+    async def _close(call: ServiceCall) -> None:
+        device[NATIVE] = "closed"
+
+    closes = async_mock_service(hass, "valve", "close_valve")
+    hass.services.async_register("valve", "close_valve", _close)
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 3))
+    await runner.async_stop_run()
+    await settle(hass)
+
+    assert device[NATIVE] == "closed"  # exactly one stop went out
+    assert len(reads) == 1  # the verification read
+    assert not runner.running
+    assert runner.zone_results == [
+        {"entity_id": NATIVE, "minutes": 3.0, "error": None, "stopped_by": "manager"}
+    ]
+    del closes
+
+
+async def test_native_zone_with_unreadable_state_gets_one_unverified_stop(
+    hass: HomeAssistant,
+    freezer: FrozenDateTimeFactory,
+    decide,
+    make_runner,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    native_zone(hass)
+    device = {NATIVE: "unknown"}
+    device_reads(hass, device)
+    closes = async_mock_service(hass, "valve", "close_valve")
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    for when in ((5, 10), (5, 10, 10), (5, 10, 20)):
+        await advance_to(hass, freezer, local(2026, 9, 14, *when))
+    assert len(closes) == 1
+    assert "can't be read after its run time" in caplog.text
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 40))
+
+    assert len(closes) == 1
+    assert not runner.running
+    assert runner.status is Status.IDLE
+    assert runner.unclosed_zones == []
+    assert runner.zone_results[0]["error"] is None
+    assert runner.zone_results[0]["stopped_by"] == "unverified"
+    assert "assuming it closed" in caplog.text
+
+
+async def test_native_zone_without_update_entity_polls_the_cached_state(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)  # no homeassistant.update_entity registered
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 5))
+    assert runner.running and not closes
+    hass.states.async_set(NATIVE, "closed")  # a poll of the integration caught the close
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 12))
+
+    assert not runner.running
+    assert not closes
+    assert runner.zone_results[0]["stopped_by"] == "device"
+    assert runner.zone_results[0]["minutes"] == 10.2
+
+
+async def test_native_zone_without_update_entity_stops_after_the_grace(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    native_zone(hass)
+    closes = flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+
+    runner = await make_runner(make_config(**NATIVE_ZONE))
+    await runner.async_run_now()
+    await settle(hass)
+    for sec in range(0, 30, 5):
+        await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, sec))
+        assert runner.running and not closes
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10, 30))
+
+    assert len(closes) == 1
+    assert not runner.running
+    assert runner.zone_results[0]["stopped_by"] == "manager"
+    assert runner.zone_results[0]["minutes"] == 10.5
