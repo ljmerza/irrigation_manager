@@ -1,0 +1,850 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "New irrigation schedule",
+        "description": "Choose how to start. Imports and descriptions only fill in the setup steps; you review every step before anything is saved.",
+        "menu_options": {
+          "create": "Set up manually",
+          "import_legacy": "Import the legacy irrigation helpers",
+          "import_bhyve": "Copy a B-Hyve device program",
+          "describe": "Describe the schedule in words (AI)"
+        }
+      },
+      "name": {
+        "title": "Schedule name",
+        "description": "Name this schedule. It becomes the device name for the schedule's entities.{notes}",
+        "data": {
+          "name": "Name"
+        }
+      },
+      "import_legacy": {
+        "title": "Import legacy helpers",
+        "description": "These helpers were found:\n{found}\n\nNotes:\n{notes}\n\nSubmit to fill in the setup steps with these values. Nothing is saved until you finish the setup."
+      },
+      "import_bhyve": {
+        "title": "Copy a B-Hyve program",
+        "description": "Pick the program to copy. A program with several start times is listed once per start time.\n\nPrograms that can't be copied:\n{unsupported}",
+        "data": {
+          "program": "Program"
+        }
+      },
+      "describe": {
+        "title": "Describe the schedule",
+        "description": "Describe the schedule in plain words, for example \"water the garden bed valve for 20 minutes every Monday and Thursday at 6am, skip if it rained\". The AI task fills in the setup steps, and you review each one.",
+        "data": {
+          "ai_task_entity": "AI task",
+          "description": "Description"
+        }
+      },
+      "zones": {
+        "title": "Zones",
+        "description": "Pick the valves or switches this schedule waters.",
+        "data": {
+          "zones": "Zones"
+        },
+        "data_description": {
+          "zones": "Valve or switch entities. Zones that support a native run time (B-Hyve, Rachio) are started with it."
+        }
+      },
+      "zone_minutes": {
+        "title": "Run time",
+        "description": "Minutes each zone runs.\n\n{zones}",
+        "data": {
+          "zone_mode": "Zone order"
+        },
+        "data_description": {
+          "zone_mode": "Zones on the same Rachio controller can only run one at a time."
+        }
+      },
+      "frequency": {
+        "title": "Frequency",
+        "description": "Choose how the watering days are picked.",
+        "menu_options": {
+          "interval": "Every X days",
+          "weekdays": "Days of the week"
+        }
+      },
+      "interval": {
+        "title": "Every X days",
+        "description": "Waters on the first run date and every X days after it. Skipped runs do not shift later runs.",
+        "data": {
+          "interval_days": "Days between runs",
+          "anchor": "First run date"
+        }
+      },
+      "weekdays": {
+        "title": "Days of the week",
+        "description": "Pick the days this schedule waters.",
+        "data": {
+          "weekdays": "Days"
+        }
+      },
+      "start": {
+        "title": "Start time",
+        "description": "Choose when watering happens.",
+        "menu_options": {
+          "start_time": "At a fixed time",
+          "start_sunrise": "Finish by sunrise",
+          "start_sunset": "Finish by sunset"
+        }
+      },
+      "start_time": {
+        "title": "Fixed start time",
+        "description": "Watering starts at this local time.",
+        "data": {
+          "start_time": "Start time"
+        }
+      },
+      "start_sunrise": {
+        "title": "Finish by sunrise",
+        "description": "Watering finishes this many minutes before sunrise. A negative number finishes after sunrise. The start time is worked out from the total run time.",
+        "data": {
+          "sun_offset_minutes": "Minutes before sunrise"
+        }
+      },
+      "start_sunset": {
+        "title": "Finish by sunset",
+        "description": "Watering finishes this many minutes before sunset. A negative number finishes after sunset. The start time is worked out from the total run time.",
+        "data": {
+          "sun_offset_minutes": "Minutes before sunset"
+        }
+      },
+      "conditions": {
+        "title": "Conditions",
+        "description": "Optional checks made at each start time. Leave empty to always water on schedule.",
+        "data": {
+          "skip_conditions": "Conditions",
+          "stale_hours": "Stale sensor hours"
+        },
+        "data_description": {
+          "stale_hours": "Ignore the temperature sensor's reading if it hasn't reported for this many hours (0 = off). Doesn't apply to rain, wind or moisture sensors, which don't report while their value stays the same."
+        }
+      },
+      "rain": {
+        "title": "Recent rain",
+        "description": "Skip the run when the rain sensors measured at least the threshold during the look-back window.",
+        "data": {
+          "rain_sensors": "Rain sensors",
+          "rain_threshold": "Rain threshold",
+          "rain_hours": "Look-back hours",
+          "rain_aggregate": "Combine the sensors by",
+          "rain_quorum": "Stations needed",
+          "rain_window": "Look-back window",
+          "rain_max_hours": "Longest look-back hours",
+          "rain_delay_auto_hours": "Rain delay after a rain skip (hours)",
+          "rain_delay_mirror": "Copy rain delays to the device",
+          "rain_stop_during_run": "Stop a run when rain starts",
+          "rain_stop_amount": "Rain that stops a run"
+        },
+        "data_description": {
+          "rain_sensors": "Precipitation total sensors, for example a weather station rain counter. Pick more than one to combine stations.",
+          "rain_threshold": "In the rain sensors' unit (for example inches or mm).",
+          "rain_quorum": "Only used when combining by number of stations: this many stations must measure at least the threshold.",
+          "rain_max_hours": "Only used with \"since the last watering\": the look-back never goes further back than this.",
+          "rain_delay_auto_hours": "After a run is skipped for rain, pause the schedule for this many hours. 0 turns this off.",
+          "rain_delay_mirror": "Also sets the rain delay on B-Hyve devices that have one. Rachio is not supported.",
+          "rain_stop_amount": "Only used when stopping on rain: how much a rain sensor must rise after the run starts, in the sensor's unit."
+        }
+      },
+      "forecast": {
+        "title": "Rain forecast",
+        "description": "Skip the run when the weather forecast for the look-ahead window shows rain.",
+        "data": {
+          "weather_entities": "Weather entities",
+          "forecast_mode": "Forecast check",
+          "forecast_probability": "Chance of rain threshold",
+          "forecast_amount": "Rain amount threshold",
+          "forecast_hours": "Look-ahead hours",
+          "forecast_quorum": "Weather entities that must agree"
+        },
+        "data_description": {
+          "forecast_probability": "Not used when the check is the rain amount only.",
+          "forecast_amount": "Total forecast rain over the look-ahead window, in Home Assistant's precipitation unit. Not used when the check is the chance of rain only.",
+          "forecast_quorum": "The run is skipped when at least this many weather entities forecast rain. Must not be more than the number of weather entities."
+        }
+      },
+      "moisture": {
+        "title": "Soil moisture",
+        "description": "The soil counts as dry when any selected sensor reads below the threshold.",
+        "data": {
+          "moisture_sensors": "Moisture sensors",
+          "moisture_threshold": "Moisture threshold",
+          "moisture_mode": "Moisture mode",
+          "moisture_unavailable": "When no sensor has a reading"
+        },
+        "data_description": {
+          "moisture_unavailable": "Only used in the first mode. In the second mode a missing reading never adds a run."
+        }
+      },
+      "temperature": {
+        "title": "Temperature",
+        "description": "Skip the run when it is too cold or too hot.",
+        "data": {
+          "temperature_sensor": "Temperature sensor",
+          "temperature_min": "Minimum temperature",
+          "temperature_max": "Maximum temperature",
+          "temperature_forecast_hours": "Forecast low look-ahead hours",
+          "weather_entities": "Weather entities for the forecast low"
+        },
+        "data_description": {
+          "temperature_sensor": "Needed for the maximum temperature, which is checked against the current reading.",
+          "temperature_min": "Skip when the current reading or the forecast low is at or below this. In the sensor's unit, or Home Assistant's unit when no sensor is picked.",
+          "temperature_max": "Skip when the current reading is at or above this.",
+          "temperature_forecast_hours": "How far ahead to look for the forecast low. 0 uses the current reading only.",
+          "weather_entities": "Only asked when the rain forecast condition is off; otherwise its weather entities are used."
+        }
+      },
+      "wind": {
+        "title": "Wind",
+        "description": "Skip the run when the average wind speed is at or above the maximum.",
+        "data": {
+          "wind_sensor": "Wind speed sensor",
+          "wind_max": "Maximum wind speed",
+          "wind_minutes": "Averaging minutes"
+        },
+        "data_description": {
+          "wind_max": "In the wind sensor's unit.",
+          "wind_minutes": "The wind speed is averaged over this many minutes. 0 uses the current reading."
+        }
+      },
+      "occupancy": {
+        "title": "Occupancy",
+        "description": "Hold off watering while someone is in the yard.",
+        "data": {
+          "occupancy_entities": "Occupancy entities",
+          "occupancy_action": "When occupied at the start time",
+          "occupancy_max_delay_minutes": "Longest delay (minutes)",
+          "occupancy_stop_during_run": "Stop a run when someone is detected"
+        },
+        "data_description": {
+          "occupancy_entities": "Binary sensors, input booleans or switches. Any of them being on counts as occupied, for example a camera's person sensor.",
+          "occupancy_max_delay_minutes": "Only used when waiting: after this many minutes of occupancy the run is skipped."
+        }
+      },
+      "ai": {
+        "title": "AI report",
+        "description": "Optional. Leave the AI task empty to turn these settings off. Nothing is sent to an AI service unless an AI task is picked.",
+        "data": {
+          "ai_task_entity": "AI task",
+          "ai_notify_service": "Send reports with",
+          "ai_report_weekday": "Weekly report day",
+          "ai_report_time": "Weekly report time",
+          "ai_camera_entity": "Yard camera",
+          "ai_llmvision_provider": "LLM Vision provider"
+        },
+        "data_description": {
+          "ai_notify_service": "Defaults to a persistent notification.",
+          "ai_report_weekday": "Pick both a day and a time for a weekly report, or neither.",
+          "ai_camera_entity": "Optional. A snapshot is checked for lawn health with LLM Vision and added to the report.",
+          "ai_llmvision_provider": "Needed when a camera is picked."
+        }
+      },
+      "bhyve_disable": {
+        "title": "Turn off the device program",
+        "description": "The schedule is ready to save. The B-Hyve device still has its own program ({switch}), which would water the same zone again. Tick the box to turn that program off.",
+        "data": {
+          "disable_program": "Turn off this program on the device"
+        }
+      }
+    },
+    "error": {
+      "name_required": "Enter a name.",
+      "name_exists": "A schedule with this name already exists.",
+      "no_zones": "Pick at least one zone.",
+      "no_weekdays": "Pick at least one day.",
+      "no_moisture_sensors": "Pick at least one moisture sensor.",
+      "rain_threshold_invalid": "Enter a rain threshold of at least 0.01.",
+      "forecast_probability_invalid": "Enter a chance of rain between 1 and 100.",
+      "moisture_threshold_invalid": "Enter a moisture threshold between 1 and 100.",
+      "number_invalid": "Enter a number.",
+      "no_rain_sensors": "Pick at least one rain sensor.",
+      "rain_quorum_invalid": "Enter a number of stations between 1 and 20.",
+      "rain_stop_amount_invalid": "Enter a rain amount of at least 0.01 to stop a run.",
+      "no_weather_entities": "Pick at least one weather entity.",
+      "forecast_amount_invalid": "Enter a forecast rain amount of at least 0.01.",
+      "forecast_quorum_invalid": "Enter a number between 1 and the number of weather entities.",
+      "temperature_invalid": "Enter a temperature between -100 and 200.",
+      "temperature_limit_required": "Enter a minimum temperature, a maximum temperature, or both.",
+      "temperature_range_invalid": "The minimum temperature must be below the maximum temperature.",
+      "temperature_max_needs_sensor": "A maximum temperature needs a temperature sensor, because it is checked against the current reading.",
+      "temperature_source_required": "Pick a temperature sensor, or weather entities with forecast hours above 0.",
+      "wind_max_invalid": "Enter a wind speed of at least 0.1.",
+      "no_occupancy_entities": "Pick at least one occupancy entity.",
+      "ai_report_incomplete": "Pick both a report day and a report time, or neither.",
+      "ai_provider_required": "Pick an LLM Vision provider to use a camera.",
+      "describe_failed": "The AI task could not read the description: {error}",
+      "disable_failed": "The B-Hyve program could not be turned off: {error}"
+    },
+    "abort": {
+      "no_legacy_helpers": "No legacy irrigation helpers were found.",
+      "no_bhyve_programs": "No B-Hyve program can be copied.\n\n{programs}"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit schedule",
+        "description": "Rename the schedule or keep the current name.",
+        "data": {
+          "name": "Name"
+        }
+      },
+      "zones": {
+        "title": "Zones",
+        "description": "Pick the valves or switches this schedule waters.",
+        "data": {
+          "zones": "Zones"
+        },
+        "data_description": {
+          "zones": "Valve or switch entities. Zones that support a native run time (B-Hyve, Rachio) are started with it."
+        }
+      },
+      "zone_minutes": {
+        "title": "Run time",
+        "description": "Minutes each zone runs.\n\n{zones}",
+        "data": {
+          "zone_mode": "Zone order"
+        },
+        "data_description": {
+          "zone_mode": "Zones on the same Rachio controller can only run one at a time."
+        }
+      },
+      "frequency": {
+        "title": "Frequency",
+        "description": "Choose how the watering days are picked.",
+        "menu_options": {
+          "interval": "Every X days",
+          "weekdays": "Days of the week"
+        }
+      },
+      "interval": {
+        "title": "Every X days",
+        "description": "Waters on the first run date and every X days after it. Skipped runs do not shift later runs.",
+        "data": {
+          "interval_days": "Days between runs",
+          "anchor": "First run date"
+        }
+      },
+      "weekdays": {
+        "title": "Days of the week",
+        "description": "Pick the days this schedule waters.",
+        "data": {
+          "weekdays": "Days"
+        }
+      },
+      "start": {
+        "title": "Start time",
+        "description": "Choose when watering happens.",
+        "menu_options": {
+          "start_time": "At a fixed time",
+          "start_sunrise": "Finish by sunrise",
+          "start_sunset": "Finish by sunset"
+        }
+      },
+      "start_time": {
+        "title": "Fixed start time",
+        "description": "Watering starts at this local time.",
+        "data": {
+          "start_time": "Start time"
+        }
+      },
+      "start_sunrise": {
+        "title": "Finish by sunrise",
+        "description": "Watering finishes this many minutes before sunrise. A negative number finishes after sunrise. The start time is worked out from the total run time.",
+        "data": {
+          "sun_offset_minutes": "Minutes before sunrise"
+        }
+      },
+      "start_sunset": {
+        "title": "Finish by sunset",
+        "description": "Watering finishes this many minutes before sunset. A negative number finishes after sunset. The start time is worked out from the total run time.",
+        "data": {
+          "sun_offset_minutes": "Minutes before sunset"
+        }
+      },
+      "conditions": {
+        "title": "Conditions",
+        "description": "Optional checks made at each start time. Leave empty to always water on schedule.",
+        "data": {
+          "skip_conditions": "Conditions",
+          "stale_hours": "Stale sensor hours"
+        },
+        "data_description": {
+          "stale_hours": "Ignore the temperature sensor's reading if it hasn't reported for this many hours (0 = off). Doesn't apply to rain, wind or moisture sensors, which don't report while their value stays the same."
+        }
+      },
+      "rain": {
+        "title": "Recent rain",
+        "description": "Skip the run when the rain sensors measured at least the threshold during the look-back window.",
+        "data": {
+          "rain_sensors": "Rain sensors",
+          "rain_threshold": "Rain threshold",
+          "rain_hours": "Look-back hours",
+          "rain_aggregate": "Combine the sensors by",
+          "rain_quorum": "Stations needed",
+          "rain_window": "Look-back window",
+          "rain_max_hours": "Longest look-back hours",
+          "rain_delay_auto_hours": "Rain delay after a rain skip (hours)",
+          "rain_delay_mirror": "Copy rain delays to the device",
+          "rain_stop_during_run": "Stop a run when rain starts",
+          "rain_stop_amount": "Rain that stops a run"
+        },
+        "data_description": {
+          "rain_sensors": "Precipitation total sensors, for example a weather station rain counter. Pick more than one to combine stations.",
+          "rain_threshold": "In the rain sensors' unit (for example inches or mm).",
+          "rain_quorum": "Only used when combining by number of stations: this many stations must measure at least the threshold.",
+          "rain_max_hours": "Only used with \"since the last watering\": the look-back never goes further back than this.",
+          "rain_delay_auto_hours": "After a run is skipped for rain, pause the schedule for this many hours. 0 turns this off.",
+          "rain_delay_mirror": "Also sets the rain delay on B-Hyve devices that have one. Rachio is not supported.",
+          "rain_stop_amount": "Only used when stopping on rain: how much a rain sensor must rise after the run starts, in the sensor's unit."
+        }
+      },
+      "forecast": {
+        "title": "Rain forecast",
+        "description": "Skip the run when the weather forecast for the look-ahead window shows rain.",
+        "data": {
+          "weather_entities": "Weather entities",
+          "forecast_mode": "Forecast check",
+          "forecast_probability": "Chance of rain threshold",
+          "forecast_amount": "Rain amount threshold",
+          "forecast_hours": "Look-ahead hours",
+          "forecast_quorum": "Weather entities that must agree"
+        },
+        "data_description": {
+          "forecast_probability": "Not used when the check is the rain amount only.",
+          "forecast_amount": "Total forecast rain over the look-ahead window, in Home Assistant's precipitation unit. Not used when the check is the chance of rain only.",
+          "forecast_quorum": "The run is skipped when at least this many weather entities forecast rain. Must not be more than the number of weather entities."
+        }
+      },
+      "moisture": {
+        "title": "Soil moisture",
+        "description": "The soil counts as dry when any selected sensor reads below the threshold.",
+        "data": {
+          "moisture_sensors": "Moisture sensors",
+          "moisture_threshold": "Moisture threshold",
+          "moisture_mode": "Moisture mode",
+          "moisture_unavailable": "When no sensor has a reading"
+        },
+        "data_description": {
+          "moisture_unavailable": "Only used in the first mode. In the second mode a missing reading never adds a run."
+        }
+      },
+      "temperature": {
+        "title": "Temperature",
+        "description": "Skip the run when it is too cold or too hot.",
+        "data": {
+          "temperature_sensor": "Temperature sensor",
+          "temperature_min": "Minimum temperature",
+          "temperature_max": "Maximum temperature",
+          "temperature_forecast_hours": "Forecast low look-ahead hours",
+          "weather_entities": "Weather entities for the forecast low"
+        },
+        "data_description": {
+          "temperature_sensor": "Needed for the maximum temperature, which is checked against the current reading.",
+          "temperature_min": "Skip when the current reading or the forecast low is at or below this. In the sensor's unit, or Home Assistant's unit when no sensor is picked.",
+          "temperature_max": "Skip when the current reading is at or above this.",
+          "temperature_forecast_hours": "How far ahead to look for the forecast low. 0 uses the current reading only.",
+          "weather_entities": "Only asked when the rain forecast condition is off; otherwise its weather entities are used."
+        }
+      },
+      "wind": {
+        "title": "Wind",
+        "description": "Skip the run when the average wind speed is at or above the maximum.",
+        "data": {
+          "wind_sensor": "Wind speed sensor",
+          "wind_max": "Maximum wind speed",
+          "wind_minutes": "Averaging minutes"
+        },
+        "data_description": {
+          "wind_max": "In the wind sensor's unit.",
+          "wind_minutes": "The wind speed is averaged over this many minutes. 0 uses the current reading."
+        }
+      },
+      "occupancy": {
+        "title": "Occupancy",
+        "description": "Hold off watering while someone is in the yard.",
+        "data": {
+          "occupancy_entities": "Occupancy entities",
+          "occupancy_action": "When occupied at the start time",
+          "occupancy_max_delay_minutes": "Longest delay (minutes)",
+          "occupancy_stop_during_run": "Stop a run when someone is detected"
+        },
+        "data_description": {
+          "occupancy_entities": "Binary sensors, input booleans or switches. Any of them being on counts as occupied, for example a camera's person sensor.",
+          "occupancy_max_delay_minutes": "Only used when waiting: after this many minutes of occupancy the run is skipped."
+        }
+      },
+      "ai": {
+        "title": "AI report",
+        "description": "Optional. Leave the AI task empty to turn these settings off. Nothing is sent to an AI service unless an AI task is picked.",
+        "data": {
+          "ai_task_entity": "AI task",
+          "ai_notify_service": "Send reports with",
+          "ai_report_weekday": "Weekly report day",
+          "ai_report_time": "Weekly report time",
+          "ai_camera_entity": "Yard camera",
+          "ai_llmvision_provider": "LLM Vision provider"
+        },
+        "data_description": {
+          "ai_notify_service": "Defaults to a persistent notification.",
+          "ai_report_weekday": "Pick both a day and a time for a weekly report, or neither.",
+          "ai_camera_entity": "Optional. A snapshot is checked for lawn health with LLM Vision and added to the report.",
+          "ai_llmvision_provider": "Needed when a camera is picked."
+        }
+      }
+    },
+    "error": {
+      "name_required": "Enter a name.",
+      "name_exists": "A schedule with this name already exists.",
+      "no_zones": "Pick at least one zone.",
+      "no_weekdays": "Pick at least one day.",
+      "no_moisture_sensors": "Pick at least one moisture sensor.",
+      "rain_threshold_invalid": "Enter a rain threshold of at least 0.01.",
+      "forecast_probability_invalid": "Enter a chance of rain between 1 and 100.",
+      "moisture_threshold_invalid": "Enter a moisture threshold between 1 and 100.",
+      "number_invalid": "Enter a number.",
+      "no_rain_sensors": "Pick at least one rain sensor.",
+      "rain_quorum_invalid": "Enter a number of stations between 1 and 20.",
+      "rain_stop_amount_invalid": "Enter a rain amount of at least 0.01 to stop a run.",
+      "no_weather_entities": "Pick at least one weather entity.",
+      "forecast_amount_invalid": "Enter a forecast rain amount of at least 0.01.",
+      "forecast_quorum_invalid": "Enter a number between 1 and the number of weather entities.",
+      "temperature_invalid": "Enter a temperature between -100 and 200.",
+      "temperature_limit_required": "Enter a minimum temperature, a maximum temperature, or both.",
+      "temperature_range_invalid": "The minimum temperature must be below the maximum temperature.",
+      "temperature_max_needs_sensor": "A maximum temperature needs a temperature sensor, because it is checked against the current reading.",
+      "temperature_source_required": "Pick a temperature sensor, or weather entities with forecast hours above 0.",
+      "wind_max_invalid": "Enter a wind speed of at least 0.1.",
+      "no_occupancy_entities": "Pick at least one occupancy entity.",
+      "ai_report_incomplete": "Pick both a report day and a report time, or neither.",
+      "ai_provider_required": "Pick an LLM Vision provider to use a camera."
+    }
+  },
+  "selector": {
+    "zone_mode": {
+      "options": {
+        "sequential": "One zone at a time",
+        "concurrent": "All zones at once"
+      }
+    },
+    "weekdays": {
+      "options": {
+        "0": "Monday",
+        "1": "Tuesday",
+        "2": "Wednesday",
+        "3": "Thursday",
+        "4": "Friday",
+        "5": "Saturday",
+        "6": "Sunday"
+      }
+    },
+    "skip_conditions": {
+      "options": {
+        "rain": "Skip after recent rain",
+        "forecast": "Skip when rain is forecast",
+        "moisture": "Soil moisture",
+        "temperature": "Skip when too cold or too hot",
+        "wind": "Skip when windy",
+        "occupancy": "Wait or skip while someone is in the yard"
+      }
+    },
+    "moisture_mode": {
+      "options": {
+        "skip": "Only water on schedule days when a sensor is below the threshold",
+        "trigger": "Water on schedule days, and on any other day when a sensor is below the threshold"
+      }
+    },
+    "moisture_unavailable": {
+      "options": {
+        "water": "Water anyway",
+        "skip": "Skip the run"
+      }
+    },
+    "rain_aggregate": {
+      "options": {
+        "max": "Any sensor at or above the threshold",
+        "median": "Median of the sensors at or above the threshold",
+        "quorum": "A number of stations at or above the threshold"
+      }
+    },
+    "rain_window": {
+      "options": {
+        "hours": "The look-back hours",
+        "since_last_watering": "Since the last watering"
+      }
+    },
+    "forecast_mode": {
+      "options": {
+        "probability": "Chance of rain",
+        "amount": "Rain amount",
+        "either": "Chance of rain or rain amount",
+        "both": "Chance of rain and rain amount"
+      }
+    },
+    "occupancy_action": {
+      "options": {
+        "delay": "Wait until clear, up to the longest delay",
+        "skip": "Skip the run"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      }
+    },
+    "button": {
+      "run_now": {
+        "name": "Run now"
+      },
+      "skip_next": {
+        "name": "Skip next run"
+      },
+      "stop": {
+        "name": "Stop"
+      },
+      "clear_rain_delay": {
+        "name": "Clear rain delay"
+      }
+    },
+    "number": {
+      "zone_minutes": {
+        "name": "{zone} run time"
+      }
+    },
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "idle": "Idle",
+          "running": "Running",
+          "disabled": "Disabled",
+          "skipped_rain": "Skipped: recent rain",
+          "skipped_forecast": "Skipped: rain forecast",
+          "skipped_moisture": "Skipped: soil moisture",
+          "skipped_manual": "Skipped manually",
+          "skipped_busy": "Skipped: previous run still active",
+          "interrupted": "Interrupted",
+          "error": "Error",
+          "skipped_rain_delay": "Skipped: rain delay",
+          "skipped_temperature": "Skipped: temperature",
+          "skipped_wind": "Skipped: wind",
+          "skipped_occupancy": "Skipped: occupied",
+          "stopped_rain": "Stopped: rain started",
+          "stopped_occupancy": "Stopped: occupied",
+          "paused": "Paused"
+        }
+      },
+      "next_run": {
+        "name": "Next run"
+      },
+      "rain_delay": {
+        "name": "Rain delay"
+      },
+      "last_run": {
+        "name": "Last run"
+      },
+      "last_run_total": {
+        "name": "Last run total"
+      },
+      "current_zone": {
+        "name": "Current zone"
+      }
+    },
+    "switch": {
+      "enabled": {
+        "name": "Enabled"
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No irrigation schedule has config entry ID {config_entry_id}."
+    },
+    "entry_not_loaded": {
+      "message": "The irrigation schedule {name} is not loaded."
+    },
+    "already_running": {
+      "message": "{name} is already running."
+    },
+    "no_zones": {
+      "message": "{name} has no zones."
+    },
+    "zone_not_in_schedule": {
+      "message": "{zone} is not a zone of {name}."
+    },
+    "ai_not_configured": {
+      "message": "{name} has no AI task set. Pick one in the schedule's AI report settings."
+    }
+  },
+  "services": {
+    "run_now": {
+      "name": "Run now",
+      "description": "Starts a schedule's zones now, ignoring its conditions and any pending skip.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to run."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Runs every zone for this many minutes instead of its configured run time."
+        }
+      }
+    },
+    "skip_next": {
+      "name": "Skip next run",
+      "description": "Skips the schedule's next run that would water, or cancels a pending skip.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to change."
+        },
+        "skip": {
+          "name": "Skip",
+          "description": "On skips the next run. Off cancels a pending skip."
+        }
+      }
+    },
+    "stop": {
+      "name": "Stop",
+      "description": "Stops the schedule's active run.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to stop."
+        }
+      }
+    },
+    "set_rain_delay": {
+      "name": "Set rain delay",
+      "description": "Pauses a schedule's automatic runs for a number of hours. 0 clears the delay.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to delay."
+        },
+        "hours": {
+          "name": "Hours",
+          "description": "How long to delay. 0 clears an active delay."
+        }
+      }
+    },
+    "run_zone": {
+      "name": "Run zone",
+      "description": "Runs one zone of a schedule now, ignoring its conditions.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule the zone belongs to."
+        },
+        "zone": {
+          "name": "Zone",
+          "description": "The valve or switch to run. It must be one of the schedule's zones."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "How long to run. Defaults to the zone's configured run time."
+        }
+      }
+    },
+    "set_enabled": {
+      "name": "Set enabled",
+      "description": "Turns a schedule's automatic runs on or off. An active run is not stopped.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to change."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "On allows automatic runs. Off stops them."
+        }
+      }
+    },
+    "evaluate": {
+      "name": "Check conditions now",
+      "description": "Returns what the schedule would do if it ran now, without watering or changing anything.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to check."
+        }
+      }
+    },
+    "get_history": {
+      "name": "Get history",
+      "description": "Returns the schedule's recent runs and skips, newest first.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to read."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "The most records to return."
+        }
+      }
+    },
+    "pause_all": {
+      "name": "Pause all",
+      "description": "Pauses automatic runs on every irrigation schedule. Active runs keep going."
+    },
+    "resume_all": {
+      "name": "Resume all",
+      "description": "Resumes automatic runs on every paused irrigation schedule."
+    },
+    "stop_all": {
+      "name": "Stop all",
+      "description": "Stops the active run on every irrigation schedule."
+    },
+    "generate_report": {
+      "name": "Generate report",
+      "description": "Asks the schedule's AI task for a watering report and returns the text.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to report on."
+        },
+        "days": {
+          "name": "Days",
+          "description": "How many days of history to include."
+        }
+      }
+    },
+    "explain_skips": {
+      "name": "Explain skips",
+      "description": "Asks the schedule's AI task to explain recent skipped runs and returns the text.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Schedule",
+          "description": "The irrigation schedule to explain."
+        },
+        "days": {
+          "name": "Days",
+          "description": "How many days of history to include."
+        }
+      }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "run_started": "Watering run started",
+      "run_finished": "Watering run finished",
+      "zone_started": "Zone started",
+      "zone_finished": "Zone finished",
+      "skipped": "Run skipped",
+      "rain_delay_set": "Rain delay changed",
+      "paused": "Schedule paused",
+      "resumed": "Schedule resumed"
+    },
+    "condition_type": {
+      "is_running": "Schedule is running",
+      "is_enabled": "Schedule is enabled",
+      "is_paused": "Schedule is paused",
+      "rain_delay_active": "Rain delay is active"
+    }
+  }
+}

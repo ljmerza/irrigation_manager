@@ -1,0 +1,70 @@
+blueprint:
+  name: Irrigation Manager - notify on skip or error
+  description: >-
+    Runs your notification actions when an Irrigation Manager schedule skips a
+    run, is stopped by rain or occupancy, or finishes a run with an error or an
+    interruption. The message is available to the actions as `{{ message }}`.
+    To install, copy this file to config/blueprints/automation/irrigation_manager/
+    and reload automations.
+  domain: automation
+  source_url: https://github.com/ljmerza/irrigation_manager/blob/main/blueprints/automation/irrigation_manager/notify_on_skip_or_error.yaml
+  input:
+    schedule:
+      name: Schedule
+      description: The schedule's device.
+      selector:
+        device:
+          filter:
+            - integration: irrigation_manager
+    notify_on_skip:
+      name: Skipped or stopped runs
+      description: Notify when a run is skipped, or stopped by rain or occupancy.
+      default: true
+      selector:
+        boolean:
+    notify_on_error:
+      name: Errors and interruptions
+      description: Notify when a run ends with an error or is interrupted.
+      default: true
+      selector:
+        boolean:
+    notify_actions:
+      name: Notification actions
+      description: Actions to run. Use `{{ message }}` for the text.
+      default:
+        - action: persistent_notification.create
+          data:
+            title: Irrigation Manager
+            message: "{{ message }}"
+      selector:
+        action:
+
+mode: queued
+
+triggers:
+  - trigger: event
+    event_type: irrigation_manager_event
+    event_data:
+      device_id: !input schedule
+
+variables:
+  notify_on_skip: !input notify_on_skip
+  notify_on_error: !input notify_on_error
+  event_type: "{{ trigger.event.data.type }}"
+  status: "{{ trigger.event.data.status | default('') }}"
+  schedule_name: "{{ trigger.event.data.name | default('Irrigation') }}"
+  message: >-
+    {% set reason = status | replace('skipped_', '') | replace('stopped_', '') | replace('_', ' ') %}
+    {% if event_type == 'skipped' %}{{ schedule_name }} skipped its run ({{ reason }}).
+    {% elif status.startswith('stopped_') %}{{ schedule_name }} stopped watering ({{ reason }}).
+    {% else %}{{ schedule_name }} finished its run with status: {{ reason }}.{% endif %}
+
+conditions:
+  - condition: template
+    value_template: >-
+      {{ (notify_on_skip and (event_type == 'skipped'
+          or (event_type == 'run_finished' and status.startswith('stopped_'))))
+         or (notify_on_error and event_type == 'run_finished'
+          and status in ['error', 'interrupted']) }}
+
+actions: !input notify_actions

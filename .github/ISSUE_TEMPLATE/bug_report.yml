@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Irrigation Manager doesn't work as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please download diagnostics first: **Settings → Devices & services → Irrigation Manager → ⋮ on the schedule → Download diagnostics**.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened
+      description: What you expected, what happened instead, and when (date/time).
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Create a schedule with …
+        2. …
+    validations:
+      required: true
+  - type: input
+    id: ha_version
+    attributes:
+      label: Home Assistant version
+      placeholder: "2026.9.2"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Irrigation Manager version
+      placeholder: "0.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: zone_platform
+    attributes:
+      label: Zone device integration
+      multiple: true
+      options:
+        - B-Hyve (orbit_bhyve)
+        - Rachio (core)
+        - Rachio Local (rachio_local)
+        - Other valve or switch
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Drag the downloaded diagnostics file here.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Lines mentioning `irrigation_manager` from **Settings → System → Logs**.
+      render: text

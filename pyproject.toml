@@ -1,0 +1,18 @@
+# Lint configuration only; tests are configured in pytest.ini.
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+extend-exclude = ["frontend/node_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+# Long lines are left to review; the code base wraps near 100 but not strictly.
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+# Home Assistant's import style: homeassistant in its own section after
+# third-party packages, imports sorted within each section.
+force-sort-within-sections = true
+combine-as-imports = true
+known-first-party = ["homeassistant", "custom_components"]

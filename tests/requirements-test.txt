@@ -1,0 +1,4 @@
+# Test-only deps. The scheduler suite exercises pure date/time math and does
+# NOT require Home Assistant — conftest.py registers a lightweight
+# irrigation_manager namespace so submodules import without the package __init__.
+pytest>=8.0

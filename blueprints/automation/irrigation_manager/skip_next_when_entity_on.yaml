@@ -1,0 +1,43 @@
+blueprint:
+  name: Irrigation Manager - skip the next run when an entity is on
+  description: >-
+    At a set time each day, sets "skip next run" on a schedule if the watched
+    entity is on. Useful with a helper you turn on after fertilizing or seeding,
+    or on days the lawn is being serviced. To install, copy this file to
+    config/blueprints/automation/irrigation_manager/ and reload automations.
+  domain: automation
+  source_url: https://github.com/ljmerza/irrigation_manager/blob/main/blueprints/automation/irrigation_manager/skip_next_when_entity_on.yaml
+  input:
+    schedule:
+      name: Schedule
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    watched_entity:
+      name: Watched entity
+      description: The next run is skipped when this entity is on at the check time.
+      selector:
+        entity: {}
+    check_time:
+      name: Check time
+      description: Pick a time before the schedule's start time.
+      default: "21:00:00"
+      selector:
+        time:
+
+mode: single
+
+triggers:
+  - trigger: time
+    at: !input check_time
+
+conditions:
+  - condition: state
+    entity_id: !input watched_entity
+    state: "on"
+
+actions:
+  - action: irrigation_manager.skip_next
+    data:
+      config_entry_id: !input schedule
+      skip: true

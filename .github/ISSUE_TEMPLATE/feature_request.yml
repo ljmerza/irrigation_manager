@@ -1,0 +1,26 @@
+name: Feature request
+description: Suggest a new capability for Irrigation Manager
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search the existing issues first — the idea may already be listed.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What you are trying to do and why the current features don't cover it.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: devices
+    attributes:
+      label: Devices and entities involved
+      description: Valve/switch integrations, sensors or weather entities this would use.

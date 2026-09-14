@@ -1,0 +1,157 @@
+run_now:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    minutes:
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 180
+          unit_of_measurement: min
+          mode: box
+
+skip_next:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    skip:
+      required: false
+      default: true
+      selector:
+        boolean:
+
+stop:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+
+set_rain_delay:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    hours:
+      required: true
+      example: 24
+      selector:
+        number:
+          min: 0
+          max: 336
+          step: 0.5
+          unit_of_measurement: h
+          mode: box
+
+run_zone:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    zone:
+      required: true
+      example: valve.garden_irrigation_zone
+      selector:
+        entity:
+          filter:
+            - domain:
+                - valve
+                - switch
+    minutes:
+      required: false
+      example: 10
+      selector:
+        number:
+          min: 1
+          max: 180
+          unit_of_measurement: min
+          mode: box
+
+set_enabled:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    enabled:
+      required: true
+      selector:
+        boolean:
+
+evaluate:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+
+get_history:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    limit:
+      required: false
+      example: 20
+      selector:
+        number:
+          min: 1
+          max: 100
+          mode: box
+
+pause_all:
+
+resume_all:
+
+stop_all:
+
+generate_report:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    days:
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 90
+          unit_of_measurement: d
+          mode: box
+
+explain_skips:
+  fields:
+    config_entry_id:
+      required: true
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    days:
+      required: false
+      default: 7
+      selector:
+        number:
+          min: 1
+          max: 90
+          unit_of_measurement: d
+          mode: box

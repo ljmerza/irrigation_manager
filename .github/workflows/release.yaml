@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  release-zip:
+    name: Build and attach release ZIP
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set integration version from release tag
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::Release tag '$GITHUB_REF_NAME' is not a version like 0.2.0 or v0.2.0"
+            exit 1
+          fi
+          jq --arg v "$version" '.version = $v' \
+             custom_components/irrigation_manager/manifest.json > manifest.tmp
+          mv manifest.tmp custom_components/irrigation_manager/manifest.json
+
+      # hacs.json sets zip_release + filename: HACS downloads this asset and
+      # extracts it into custom_components/irrigation_manager/, so the zip holds
+      # the integration's files at its root.
+      - name: Build irrigation_manager.zip
+        run: |
+          cd custom_components/irrigation_manager
+          zip -r ../../irrigation_manager.zip . -x '*__pycache__*' '*.pyc'
+
+      - name: Attach ZIP to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: irrigation_manager.zip

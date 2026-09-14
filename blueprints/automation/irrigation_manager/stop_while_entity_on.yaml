@@ -1,0 +1,95 @@
+blueprint:
+  name: Irrigation Manager - stop and pause while an entity is on
+  description: >-
+    When the watched entity turns on (for example a Frigate person occupancy
+    binary sensor or a gate contact), stops the schedule's active run and turns
+    the schedule off. When the entity has been off for the chosen number of
+    minutes, turns the schedule back on. After a Home Assistant restart or an
+    automation reload, if the entity is off it waits the same number of minutes
+    and turns the schedule back on, so a restart during the wait can't leave the
+    schedule off. It turns the schedule back on even if you had turned it off
+    manually, so use it only for schedules you normally leave enabled. To
+    install, copy this file to config/blueprints/automation/irrigation_manager/
+    and reload automations.
+  domain: automation
+  source_url: https://github.com/ljmerza/irrigation_manager/blob/main/blueprints/automation/irrigation_manager/stop_while_entity_on.yaml
+  input:
+    schedule:
+      name: Schedule
+      selector:
+        config_entry:
+          integration: irrigation_manager
+    watched_entity:
+      name: Watched entity
+      description: Watering stops while this entity is on.
+      selector:
+        entity: {}
+    clear_minutes:
+      name: Minutes off before resuming
+      default: 10
+      selector:
+        number:
+          min: 0
+          max: 240
+          unit_of_measurement: min
+          mode: box
+
+mode: restart
+
+triggers:
+  - trigger: state
+    entity_id: !input watched_entity
+    to: "on"
+    id: "on"
+  - trigger: state
+    entity_id: !input watched_entity
+    to: "off"
+    for:
+      minutes: !input clear_minutes
+    id: "off"
+  # A restart or reload during the "off" wait above loses it; check again.
+  - trigger: homeassistant
+    event: start
+    id: resume_check
+  - trigger: event
+    event_type: automation_reloaded
+    id: resume_check
+
+actions:
+  - choose:
+      - conditions:
+          - condition: trigger
+            id: "on"
+        sequence:
+          - action: irrigation_manager.stop
+            data:
+              config_entry_id: !input schedule
+          - action: irrigation_manager.set_enabled
+            data:
+              config_entry_id: !input schedule
+              enabled: false
+      - conditions:
+          - condition: trigger
+            id: "off"
+        sequence:
+          - action: irrigation_manager.set_enabled
+            data:
+              config_entry_id: !input schedule
+              enabled: true
+      - conditions:
+          - condition: trigger
+            id: resume_check
+          - condition: state
+            entity_id: !input watched_entity
+            state: "off"
+        sequence:
+          # mode: restart cancels this wait if the entity turns on meanwhile.
+          - delay:
+              minutes: !input clear_minutes
+          - condition: state
+            entity_id: !input watched_entity
+            state: "off"
+          - action: irrigation_manager.set_enabled
+            data:
+              config_entry_id: !input schedule
+              enabled: true

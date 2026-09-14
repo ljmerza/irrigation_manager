@@ -1,0 +1,8 @@
+frontend/node_modules/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Local planning docs: contain install-specific entity ids and local paths
+IDEAS.md
+docs/dev/

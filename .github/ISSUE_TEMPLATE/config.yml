@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Home Assistant community forum
+    url: https://community.home-assistant.io/
+    about: General Home Assistant questions not specific to this integration.

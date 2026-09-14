@@ -1,0 +1,11 @@
+# CI test dependencies, pinned to the local test environment.
+# pytest-homeassistant-custom-component 0.13.205 pins homeassistant==2025.1.4,
+# pytest and pytest-asyncio itself; don't pin those separately.
+pytest-homeassistant-custom-component==0.13.205
+
+# Requirements of the core components the tests set up (the test hass skips
+# pip installs): recorder for the rain look-back, http for websocket tests.
+fnv-hash-fast==1.0.2
+psutil-home-assistant==0.0.1
+aiohttp_cors==0.7.0
+aiohttp-fast-zlib==0.2.0
