@@ -1,8 +1,16 @@
 # HACS readiness
 
-What is prepared in this repository for HACS, and what still has to be done by hand. The repository is public at https://github.com/ljmerza/irrigation_manager; no release or HACS submission exists yet.
+What is prepared in this repository for HACS, and the state of the submission. The repository is public at https://github.com/ljmerza/irrigation_manager.
 
-Items marked **verify before submitting** come from memory of HACS / GitHub behaviour and could not be checked offline.
+Status as of 2026-09-15:
+
+| Step | State |
+|---|---|
+| Release | [v0.2.0](https://github.com/ljmerza/irrigation_manager/releases/tag/v0.2.0) — full release, `irrigation_manager.zip` attached, `manifest.json` at the zip root with version `0.2.0` |
+| Validate workflow | passing (hassfest + HACS action, [run 35047413993](https://github.com/ljmerza/irrigation_manager/actions/runs/35047413993)) |
+| HACS default submission | [hacs/default#11022](https://github.com/hacs/default/pull/11022), all 12 checks green, waiting for a HACS maintainer to merge |
+
+Items marked **verify before submitting** came from memory and could not be checked offline; the ones that have since been checked are marked **verified**.
 
 ## Prepared in the repository
 
@@ -59,20 +67,31 @@ The test jobs run Home Assistant 2025.1.4 (what the local suite uses), while the
 
 ## Manual steps
 
-1. **Make lint blocking**: `ruff check --fix custom_components tests assets`, review the import changes, run the tests, remove `continue-on-error: true` from the `lint` job.
-2. **Get the checks green** on GitHub: Validate (hassfest, HACS) and Tests. Fix anything hassfest reports (translations, services, manifest).
-3. **Cut a release**: push a tag (e.g. `git tag v0.2.0 && git push origin v0.2.0`). Confirm the release workflow created a full release (not a pre-release) with `irrigation_manager.zip` attached and `manifest.json` at the zip root.
-4. **Test the HACS install** on a test Home Assistant: HACS → Custom repositories → add the repository as Integration → install → restart → add the integration.
-5. **Brands** — if the HACS brands check fails or you support Home Assistant older than 2026.3: open a PR to `home-assistant/brands` adding `custom_integrations/irrigation_manager/icon.png` and `icon@2x.png` from `custom_components/irrigation_manager/brand/` (**verify before submitting** the current brands repository rules for custom integrations).
-6. **Submit to the HACS default repositories** once the above pass (**verify before submitting** the current process; historically a PR to `hacs/default` adding the repository to the `integration` list).
+Done:
 
-## HACS default-repository requirements (from memory — verify before submitting)
+2. **Checks green on GitHub** — Validate (hassfest, HACS) and Tests both pass on `main`.
+3. **Release cut** — `v0.2.0` tagged and pushed; the release workflow produced a full release with `irrigation_manager.zip` attached.
+6. **Submitted to the HACS default repositories** — [hacs/default#11022](https://github.com/hacs/default/pull/11022), one line added to the `integration` list. The PR must stay editable and must not be review-requested; HACS closes PRs that request reviews.
 
-- Public repository on GitHub, not archived, with a description, topics and issues enabled.
-- `README.md` describing the integration; `hacs.json` at the repository root with at least `name`.
-- Exactly one integration under `custom_components/<domain>/`; `manifest.json` includes `domain`, `name`, `version`, `documentation`, `issue_tracker` and `codeowners`.
-- The HACS action passes (repository structure, information, brands, releases).
-- hassfest passes.
-- At least one GitHub release (full release, not only a tag).
-- Brand images available where the HACS brands check expects them (see Brand icon above).
-- With `zip_release: true`, every release must carry the asset named in `filename`; the zip's contents are extracted into `custom_components/irrigation_manager/`.
+Still open:
+
+1. **Make lint blocking**: `ruff check --fix custom_components tests assets`, review the import changes, run the tests, remove `continue-on-error: true` from the `lint` job. 23 `I001` import-order findings remain. This is a house rule, not a HACS requirement.
+4. **Test the HACS install** on a test Home Assistant: HACS → Custom repositories → add the repository as Integration → install → restart → add the integration. After #11022 merges the custom-repository step is no longer needed, and the README install section should drop it.
+5. **Brands** — **verified not required for the HACS checks**: the `brand/` folder in the integration satisfies the HACS action's brands validation, and the default-repository PR's brands check passed without an entry in `home-assistant/brands`. A PR to `home-assistant/brands` is still needed if you want the icon to show on Home Assistant older than 2026.3.
+
+## HACS default-repository requirements (verified 2026-09-15 against hacs.xyz and the hacs/default checks)
+
+Submission is a PR to [hacs/default](https://github.com/hacs/default) adding `"<owner>/<repo>"` to the `integration` file, sorted with Python's `str.casefold` (`scripts/is_sorted.py` enforces it; `scripts/sort.py` reserializes the whole file, which produces unrelated whitespace changes — insert the single line by hand instead).
+
+The PR must be opened by the repository's owner or a major contributor, from a personal account, with maintainer edits allowed. The PR body has to carry the checklist and three links: the release, the successful HACS action job, and the successful hassfest job.
+
+Requirements the checks enforce:
+
+- Public GitHub repository, not archived, with a description, topics and issues enabled.
+- `hacs.json` at the root with at least `name`. `render_readme`, `zip_release` and `filename` are accepted by the HACS action.
+- Exactly one integration under `custom_components/<domain>/`; `manifest.json` defines `domain`, `documentation`, `issue_tracker`, `codeowners`, `name` and `version`.
+- Brand assets: a `brand/` directory in the integration with at least `icon.png`.
+- The HACS action passes with no `ignore` key, and hassfest passes.
+- At least one full GitHub release, created after those actions passed. With `zip_release: true`, every release must carry the asset named in `filename`.
+
+The hacs/default PR itself runs: Preflight, Owner, Editable PR, Releases, Removed repository, Existing repository, Hassfest, HACS action, JQ, JSON schema and Sorted.
