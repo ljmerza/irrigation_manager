@@ -2,7 +2,7 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
-## [0.2.0] — Unreleased
+## [0.2.0] — 2026-09-15
 
 Adds rain and weather conditions, automations and API, AI reports, and migration from existing setups.
 
@@ -11,7 +11,7 @@ Adds rain and weather conditions, automations and API, AI reports, and migration
 - Rain and weather:
   - Several rain sensors per schedule, combined by max, median or quorum.
   - Rain window "since the last watering", capped at a maximum number of hours.
-  - Rain delay: set from the panel, a button or the `set_rain_delay` service, or automatically after a rain skip. Optionally copied to B-Hyve devices' rain delay number.
+  - Rain delay: set from the panel, a button or the `set_rain_delay` service, or automatically after a rain skip.
   - Stop an active run when rain starts.
   - Forecast rain amount (alone, or with the rain chance as either/both) and agreement across several weather entities.
   - Temperature condition: freeze skip from the current reading or forecast low, heat skip from the current reading.
@@ -32,6 +32,7 @@ Adds rain and weather conditions, automations and API, AI reports, and migration
 - HACS readiness: brand icon, validate / tests / release workflows, issue templates, submission checklist.
 
 ### Changed
+- Rain delays are no longer copied to the device's own rain delay (the B-Hyve rain delay number). A delay applies to this integration's schedules only; the `rain_delay_mirror` option is gone and is ignored on existing schedules.
 - **Add integration** opens a menu: create manually, import legacy helpers, import a B-Hyve program, or describe in words.
 - Saving a schedule from the options flow stores `rain_sensors` / `weather_entities` lists in place of the single `rain_sensor` / `weather_entity`. Schedules that aren't edited keep working unchanged.
 

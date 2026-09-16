@@ -250,12 +250,7 @@ export const conditionLines = (hass: HomeAssistant, config: ScheduleConfig): str
     );
     const autoHours = config.rain_delay_auto_hours ?? 0;
     if (autoHours > 0) {
-      lines.push(
-        `After a rain skip, delay watering ${plural(autoHours, "hour")}` +
-          (config.rain_delay_mirror ? " (also on B-Hyve devices)" : "")
-      );
-    } else if (config.rain_delay_mirror) {
-      lines.push("Rain delays are also set on B-Hyve devices");
+      lines.push(`After a rain skip, delay watering ${plural(autoHours, "hour")}`);
     }
     if (config.rain_stop_during_run) {
       lines.push(

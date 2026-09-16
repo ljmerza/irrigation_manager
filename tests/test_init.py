@@ -430,7 +430,6 @@ async def test_v02_settings_change_applies_without_reload(hass: HomeAssistant) -
             "rain_quorum": 2,
             "rain_window": "hours",
             "rain_delay_auto_hours": 24,
-            "rain_delay_mirror": True,
             "occupancy_entities": ["binary_sensor.yard_person"],
             "occupancy_action": "delay",
             "occupancy_max_delay_minutes": 30,

@@ -64,7 +64,6 @@ Conditions are checked at each scheduled start. When several would skip, the sta
 - **Threshold** (0.01 or more, in the sensor's unit) and **window**: the last N hours, or **since the last watering** with a maximum number of hours. Without a previous watering the last N hours are used.
 - **Several sensors**: **max** (any station at or over the threshold), **median**, or **quorum** (at least K stations at or over the threshold). Stations without data don't count.
 - **Automatic rain delay**: after a run is skipped for rain, skip scheduled runs for N more hours (0 = off). A longer delay that is already set is kept.
-- **Copy rain delays to devices**: also sets the rain delay number on B-Hyve devices that have one, in whole hours up to the device's maximum.
 - **Stop a run when rain starts**: stops an active run when a rain sensor rises by at least the given amount since the run started (status `stopped_rain`). Applies to manual runs too.
 
 ### Forecast
@@ -224,6 +223,8 @@ An admin-only **Irrigation** entry in the sidebar lists every schedule:
 
 **Add schedule** and **Edit** open Home Assistant's own setup and options flows.
 
+<img src="assets/panel.png" alt="A schedule card in the Irrigation panel, showing next run, rain delay presets, the schedule and zone summaries, conditions, last run, last status and history" width="360">
+
 ## Migration
 
 Importing the legacy watering helpers and B-Hyve programs, and retiring the old Node-RED flows: [docs/migration.md](docs/migration.md).
@@ -232,7 +233,7 @@ Importing the legacy watering helpers and B-Hyve programs, and retiring the old 
 
 - Per-zone run time is capped at 180 minutes (Rachio's API limit).
 - A run whose start time passed while Home Assistant was down is not made up.
-- Rachio can't take a rain delay from this integration. Copying rain delays only works on B-Hyve devices with a rain delay number; B-Hyve HT25 hose timers have none.
+- A rain delay applies to this integration's schedules only. It is not sent to the device's own program, so a program running on a B-Hyve or Rachio device is unaffected.
 - Stale sensor hours applies to the temperature sensor only.
 - The forecast rain amount threshold is in Home Assistant's precipitation unit, not the weather entity's.
 - Assist intents are only offered to assistants with the valve or switch domain exposed.

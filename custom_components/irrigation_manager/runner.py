@@ -56,7 +56,6 @@ from .const import (
     CONF_OCCUPANCY_MAX_DELAY,
     CONF_OCCUPANCY_STOP_DURING_RUN,
     CONF_RAIN_DELAY_AUTO_HOURS,
-    CONF_RAIN_DELAY_MIRROR,
     CONF_RAIN_SENSOR,
     CONF_RAIN_SENSORS,
     CONF_RAIN_STOP_AMOUNT,
@@ -1161,18 +1160,6 @@ class ScheduleRunner:
             return  # never shorten a longer delay
         await self.async_set_rain_delay(hours)
 
-    async def _async_mirror_rain_delay(self, hours: float) -> None:
-        for entity_id in zone_entity_ids(self.config):
-            try:
-                await async_get_driver(self.hass, entity_id).async_set_rain_delay(hours)
-            except HomeAssistantError as err:
-                _LOGGER.warning(
-                    "%s: copying the rain delay to %s failed: %s",
-                    self.entry.title,
-                    entity_id,
-                    err,
-                )
-
     # --- public API -----------------------------------------------------------
 
     async def async_run_now(self, minutes: int | None = None) -> None:
@@ -1272,8 +1259,6 @@ class ScheduleRunner:
         self._fire(EventType.RAIN_DELAY_SET, rain_delay_until=_iso(self._rain_delay_until))
         await self._async_save()
         self._notify()
-        if self.config.get(CONF_RAIN_DELAY_MIRROR):
-            await self._async_mirror_rain_delay(value)
 
     async def async_evaluate(self) -> dict[str, Any]:
         """What the conditions say right now, without running or recording anything."""

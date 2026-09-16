@@ -41,7 +41,6 @@ from custom_components.irrigation_manager.const import (
     CONF_OCCUPANCY_MAX_DELAY,
     CONF_OCCUPANCY_STOP_DURING_RUN,
     CONF_RAIN_DELAY_AUTO_HOURS,
-    CONF_RAIN_DELAY_MIRROR,
     CONF_RAIN_SENSOR,
     CONF_RAIN_SENSORS,
     CONF_RAIN_STOP_AMOUNT,
@@ -921,35 +920,6 @@ async def test_forecast_skip_does_not_start_automatic_rain_delay(
     runner = await make_runner(make_config(**{CONF_RAIN_DELAY_AUTO_HOURS: 48}))
     await advance_to(hass, freezer, local(2026, 9, 14, 6))
     assert runner.rain_delay_until is None
-
-
-async def test_rain_delay_is_copied_to_zone_drivers_only_when_enabled(
-    hass: HomeAssistant, calls, decide, make_runner
-) -> None:
-    mirror = AsyncMock()
-    with patch("custom_components.irrigation_manager.drivers.ZoneDriver.async_set_rain_delay", mirror):
-        plain = await make_runner()
-        await plain.async_set_rain_delay(24)
-        mirror.assert_not_awaited()
-
-        entry = MockConfigEntry(domain=DOMAIN, title="Mirrored", data=make_config(**{CONF_RAIN_DELAY_MIRROR: True}))
-        entry.add_to_hass(hass)
-        mirrored = await make_runner(entry=entry)
-        await mirrored.async_set_rain_delay(24)
-        await mirrored.async_set_rain_delay(0)
-
-    assert [call.args for call in mirror.await_args_list] == [(24.0,), (24.0,), (0.0,), (0.0,)]
-
-
-async def test_rain_delay_copy_failure_is_logged_not_raised(
-    hass: HomeAssistant, calls, decide, make_runner, caplog: pytest.LogCaptureFixture
-) -> None:
-    mirror = AsyncMock(side_effect=HomeAssistantError("device offline"))
-    with patch("custom_components.irrigation_manager.drivers.ZoneDriver.async_set_rain_delay", mirror):
-        runner = await make_runner(make_config(**{CONF_RAIN_DELAY_MIRROR: True}))
-        await runner.async_set_rain_delay(24)
-    assert runner.rain_delay_until is not None
-    assert "device offline" in caplog.text
 
 
 # --- stop during run --------------------------------------------------------------

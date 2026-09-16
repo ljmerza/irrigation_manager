@@ -11,13 +11,11 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 
 from custom_components.irrigation_manager.drivers import (
     ORBIT_BHYVE_MAX_SECONDS,
-    ORBIT_BHYVE_RAIN_DELAY_SUFFIX,
     OrbitBhyveDriver,
     RachioDriver,
     RachioLocalDriver,
     ZoneDriver,
     async_get_driver,
-    device_entity,
 )
 
 
@@ -190,102 +188,6 @@ async def test_service_error_is_wrapped(hass: HomeAssistant) -> None:
     async_mock_service(hass, "switch", "turn_on", raise_exception=ValueError("relay jammed"))
     with pytest.raises(HomeAssistantError, match="relay jammed"):
         await ZoneDriver(hass, "switch.relay").async_start(timedelta(minutes=1))
-
-
-# --- rain delay mirroring -------------------------------------------------------
-
-
-def bhyve_device(
-    hass: HomeAssistant,
-    *,
-    with_rain_delay: bool = True,
-    rain_delay_state: str = "0",
-    max_hours: float = 168,
-) -> tuple[str, str | None]:
-    """A B-Hyve device with a zone valve, a rain delay number and an unrelated number."""
-    config_entry = MockConfigEntry(domain="orbit_bhyve")
-    config_entry.add_to_hass(hass)
-    device = dr.async_get(hass).async_get_or_create(
-        config_entry_id=config_entry.entry_id, identifiers={("orbit_bhyve", "garden")}
-    )
-    registry = er.async_get(hass)
-    valve = registry.async_get_or_create(
-        "valve", "orbit_bhyve", "garden_zone_1",
-        suggested_object_id="garden_irrigation_zone", device_id=device.id, config_entry=config_entry,
-    )
-    hass.states.async_set(valve.entity_id, "closed")
-    other = registry.async_get_or_create(
-        "number", "orbit_bhyve", "garden_duration",
-        suggested_object_id="garden_irrigation_watering_duration", device_id=device.id, config_entry=config_entry,
-    )
-    hass.states.async_set(other.entity_id, "10", {"min": 1, "max": 1440})
-    number_id = None
-    if with_rain_delay:
-        number = registry.async_get_or_create(
-            "number", "orbit_bhyve", f"garden{ORBIT_BHYVE_RAIN_DELAY_SUFFIX}",
-            suggested_object_id="garden_irrigation_rain_delay", device_id=device.id, config_entry=config_entry,
-        )
-        hass.states.async_set(number.entity_id, rain_delay_state, {"min": 0, "max": max_hours, "step": 1})
-        number_id = number.entity_id
-    return valve.entity_id, number_id
-
-
-@pytest.mark.parametrize(
-    ("hours", "value"),
-    [(24, 24), (0, 0), (500, 168), (2.6, 3)],
-    ids=["hours", "clear", "clamped-to-max", "rounded"],
-)
-async def test_orbit_bhyve_copies_rain_delay_to_device_number(
-    hass: HomeAssistant, hours: float, value: int
-) -> None:
-    zone, number = bhyve_device(hass)
-    async_mock_service(hass, "orbit_bhyve", "start_watering")
-    set_value = async_mock_service(hass, "number", "set_value")
-
-    driver = async_get_driver(hass, zone)
-    assert isinstance(driver, OrbitBhyveDriver)
-    await driver.async_set_rain_delay(hours)
-    assert [call.data for call in set_value] == [{"entity_id": number, "value": value}]
-
-
-async def test_orbit_bhyve_without_rain_delay_entity_does_nothing(hass: HomeAssistant) -> None:
-    zone, _ = bhyve_device(hass, with_rain_delay=False)
-    async_mock_service(hass, "orbit_bhyve", "start_watering")
-    set_value = async_mock_service(hass, "number", "set_value")
-
-    await async_get_driver(hass, zone).async_set_rain_delay(24)
-    assert not set_value
-
-
-async def test_orbit_bhyve_unavailable_rain_delay_raises(hass: HomeAssistant) -> None:
-    zone, _ = bhyve_device(hass, rain_delay_state="unavailable")
-    async_mock_service(hass, "orbit_bhyve", "start_watering")
-    set_value = async_mock_service(hass, "number", "set_value")
-
-    with pytest.raises(HomeAssistantError, match="not available"):
-        await async_get_driver(hass, zone).async_set_rain_delay(24)
-    assert not set_value
-
-
-async def test_other_drivers_do_not_copy_rain_delay(hass: HomeAssistant) -> None:
-    rachio = register(hass, "switch", "rachio", "front_yard_sprinkler")
-    rachio_local = register(hass, "switch", "rachio_local", "back_zone")
-    hass.states.async_set("valve.drip", "closed")
-    async_mock_service(hass, "rachio", "start_watering")
-    async_mock_service(hass, "rachio_local", "turn_on")
-    pause = async_mock_service(hass, "rachio", "pause_watering")
-    set_value = async_mock_service(hass, "number", "set_value")
-
-    for entity_id in (rachio, rachio_local, "valve.drip"):
-        await async_get_driver(hass, entity_id).async_set_rain_delay(24)
-    assert not pause
-    assert not set_value
-
-
-async def test_device_entity_ignores_entities_without_a_device(hass: HomeAssistant) -> None:
-    entity_id = register(hass, "valve", "orbit_bhyve", "loose", "closed")
-    assert device_entity(hass, entity_id, "number", "orbit_bhyve", ORBIT_BHYVE_RAIN_DELAY_SUFFIX) is None
-    assert device_entity(hass, "valve.unknown", "number", "orbit_bhyve", ORBIT_BHYVE_RAIN_DELAY_SUFFIX) is None
 
 
 # --- entity state reads -------------------------------------------------------------

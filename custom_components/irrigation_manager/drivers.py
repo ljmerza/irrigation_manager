@@ -5,8 +5,6 @@ that support one expose their own service. A driver is picked per entity from
 its entity registry platform. Native-duration devices shut off on their own at
 the end of the duration; the runner waits for that before sending a stop of
 its own, and reads the entity state (is_on) to verify every stop.
-
-Drivers can also copy a schedule's rain delay to devices that have one.
 """
 from __future__ import annotations
 
@@ -25,8 +23,6 @@ _LOGGER = logging.getLogger(__name__)
 
 # orbit_bhyve.start_watering accepts 1..65535 seconds.
 ORBIT_BHYVE_MAX_SECONDS = 65535
-# orbit_bhyve's rain delay number (hours, 0 clears) has unique_id "<device>_rain_delay".
-ORBIT_BHYVE_RAIN_DELAY_SUFFIX = "_rain_delay"
 
 # Valve states (homeassistant.components.valve.ValveState) as plain strings so
 # the driver doesn't import the valve component.
@@ -96,12 +92,6 @@ class ZoneDriver:
             return False
         return None
 
-    async def async_set_rain_delay(self, hours: float) -> None:
-        """Copy a schedule rain delay to the device; 0 clears it.
-
-        Plain valves and switches have no rain delay, so this does nothing.
-        """
-
     async def _async_call(
         self,
         domain: str,
@@ -148,32 +138,9 @@ class OrbitBhyveDriver(ZoneDriver):
             target_entity=False,
         )
 
-    async def async_set_rain_delay(self, hours: float) -> None:
-        """Set the device's rain delay number (whole hours, clamped to its max)."""
-        number_id = device_entity(
-            self.hass, self.entity_id, "number", "orbit_bhyve", ORBIT_BHYVE_RAIN_DELAY_SUFFIX
-        )
-        if number_id is None:
-            # HT25 hose timers have no rain delay entity.
-            _LOGGER.debug("%s: device has no rain delay entity", self.entity_id)
-            return
-        value = max(0.0, hours)
-        state = self.hass.states.get(number_id)
-        maximum = _as_float(state.attributes.get("max")) if state is not None else None
-        if maximum is not None:
-            value = min(value, maximum)
-        await self._async_call(
-            "number", "set_value", {"value": int(round(value))}, entity_id=number_id
-        )
-
 
 class RachioDriver(ZoneDriver):
-    """Core rachio zones and hose timers: duration in whole minutes.
-
-    No rain delay copy: core rachio registers pause_watering only for
-    non-Gen-1 controllers (not hose timers), addressed by controller name, with
-    a 60-minute UI limit, so it can't express a multi-hour schedule delay.
-    """
+    """Core rachio zones and hose timers: duration in whole minutes."""
 
     native_duration = True
 
@@ -227,35 +194,3 @@ def async_get_driver(hass: HomeAssistant, entity_id: str) -> ZoneDriver:
         )
     return ZoneDriver(hass, entity_id)
 
-
-@callback
-def device_entity(
-    hass: HomeAssistant,
-    entity_id: str,
-    domain: str,
-    platform: str,
-    unique_id_suffix: str,
-) -> str | None:
-    """Enabled entity on `entity_id`'s device matching domain, platform and unique_id suffix."""
-    registry = er.async_get(hass)
-    entry = registry.async_get(entity_id)
-    if entry is None or entry.device_id is None:
-        return None
-    for candidate in er.async_entries_for_device(registry, entry.device_id):
-        if (
-            candidate.domain == domain
-            and candidate.platform == platform
-            and candidate.unique_id.endswith(unique_id_suffix)
-        ):
-            return candidate.entity_id
-    return None
-
-
-def _as_float(value: Any) -> float | None:
-    if value is None or isinstance(value, bool):
-        return None
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    return number if math.isfinite(number) else None

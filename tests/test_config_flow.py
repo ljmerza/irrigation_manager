@@ -96,7 +96,6 @@ V02_CONFIG: dict[str, Any] = {
     "rain_window": "since_last_watering",
     "rain_max_hours": 96,
     "rain_delay_auto_hours": 48,
-    "rain_delay_mirror": True,
     "rain_stop_during_run": True,
     "rain_stop_amount": 0.05,
     "weather_entities": ["weather.krdu_daynight", "weather.openweathermap"],
@@ -700,7 +699,6 @@ async def test_every_v02_setting(hass: HomeAssistant) -> None:
             "rain_window": "since_last_watering",
             "rain_max_hours": 96,
             "rain_delay_auto_hours": 48,
-            "rain_delay_mirror": True,
             "rain_stop_during_run": True,
             "rain_stop_amount": 0.05,
         },
@@ -1544,7 +1542,6 @@ async def test_garden_bed_v01_config_round_trips(hass: HomeAssistant) -> None:
             "rain_aggregate",
             "rain_window",
             "rain_delay_auto_hours",
-            "rain_delay_mirror",
             "rain_stop_during_run",
         )
     } == {
@@ -1554,7 +1551,6 @@ async def test_garden_bed_v01_config_round_trips(hass: HomeAssistant) -> None:
         "rain_aggregate": "max",
         "rain_window": "hours",
         "rain_delay_auto_hours": 0,
-        "rain_delay_mirror": False,
         "rain_stop_during_run": False,
     }
     result = await options_configure(hass, result, {})

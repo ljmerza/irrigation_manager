@@ -146,7 +146,6 @@
           "rain_window": "Look-back window",
           "rain_max_hours": "Longest look-back hours",
           "rain_delay_auto_hours": "Rain delay after a rain skip (hours)",
-          "rain_delay_mirror": "Copy rain delays to the device",
           "rain_stop_during_run": "Stop a run when rain starts",
           "rain_stop_amount": "Rain that stops a run"
         },
@@ -156,7 +155,6 @@
           "rain_quorum": "Only used when combining by number of stations: this many stations must measure at least the threshold.",
           "rain_max_hours": "Only used with \"since the last watering\": the look-back never goes further back than this.",
           "rain_delay_auto_hours": "After a run is skipped for rain, pause the schedule for this many hours. 0 turns this off.",
-          "rain_delay_mirror": "Also sets the rain delay on B-Hyve devices that have one. Rachio is not supported.",
           "rain_stop_amount": "Only used when stopping on rain: how much a rain sensor must rise after the run starts, in the sensor's unit."
         }
       },
@@ -414,7 +412,6 @@
           "rain_window": "Look-back window",
           "rain_max_hours": "Longest look-back hours",
           "rain_delay_auto_hours": "Rain delay after a rain skip (hours)",
-          "rain_delay_mirror": "Copy rain delays to the device",
           "rain_stop_during_run": "Stop a run when rain starts",
           "rain_stop_amount": "Rain that stops a run"
         },
@@ -424,7 +421,6 @@
           "rain_quorum": "Only used when combining by number of stations: this many stations must measure at least the threshold.",
           "rain_max_hours": "Only used with \"since the last watering\": the look-back never goes further back than this.",
           "rain_delay_auto_hours": "After a run is skipped for rain, pause the schedule for this many hours. 0 turns this off.",
-          "rain_delay_mirror": "Also sets the rain delay on B-Hyve devices that have one. Rachio is not supported.",
           "rain_stop_amount": "Only used when stopping on rain: how much a rain sensor must rise after the run starts, in the sensor's unit."
         }
       },

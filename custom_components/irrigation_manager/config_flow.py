@@ -79,7 +79,6 @@ from .const import (
     CONF_OCCUPANCY_STOP_DURING_RUN,
     CONF_RAIN_AGGREGATE,
     CONF_RAIN_DELAY_AUTO_HOURS,
-    CONF_RAIN_DELAY_MIRROR,
     CONF_RAIN_HOURS,
     CONF_RAIN_MAX_HOURS,
     CONF_RAIN_QUORUM,
@@ -212,7 +211,6 @@ _CONDITION_KEYS: dict[SkipCondition, tuple[str, ...]] = {
         CONF_RAIN_WINDOW,
         CONF_RAIN_MAX_HOURS,
         CONF_RAIN_DELAY_AUTO_HOURS,
-        CONF_RAIN_DELAY_MIRROR,
         CONF_RAIN_STOP_DURING_RUN,
         CONF_RAIN_STOP_AMOUNT,
     ),
@@ -731,10 +729,6 @@ class ScheduleFlowMixin:
                     max_hours if window is RainWindow.SINCE_LAST_WATERING else None,
                 )
                 self._set(CONF_RAIN_DELAY_AUTO_HOURS, auto_hours or None)
-                self._set(
-                    CONF_RAIN_DELAY_MIRROR,
-                    True if user_input[CONF_RAIN_DELAY_MIRROR] else None,
-                )
                 self._set(CONF_RAIN_STOP_DURING_RUN, True if stop else None)
                 self._set(CONF_RAIN_STOP_AMOUNT, stop_amount if stop else None)
                 return await self._async_next_condition()
@@ -772,10 +766,6 @@ class ScheduleFlowMixin:
                     CONF_RAIN_DELAY_AUTO_HOURS,
                     default=self._default(CONF_RAIN_DELAY_AUTO_HOURS, 0),
                 ): _number_selector(0, MAX_RAIN_DELAY_HOURS, unit="h"),
-                vol.Required(
-                    CONF_RAIN_DELAY_MIRROR,
-                    default=self._default(CONF_RAIN_DELAY_MIRROR, False),
-                ): BooleanSelector(),
                 vol.Required(
                     CONF_RAIN_STOP_DURING_RUN,
                     default=self._default(CONF_RAIN_STOP_DURING_RUN, False),

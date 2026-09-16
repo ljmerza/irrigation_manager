@@ -181,7 +181,6 @@ CONF_RAIN_MAX_HOURS: Final = "rain_max_hours"  # int, cap for SINCE_LAST_WATERIN
 CONF_RAIN_STOP_DURING_RUN: Final = "rain_stop_during_run"  # bool
 CONF_RAIN_STOP_AMOUNT: Final = "rain_stop_amount"  # float, sensor unit, rise since run start
 CONF_RAIN_DELAY_AUTO_HOURS: Final = "rain_delay_auto_hours"  # int; after SKIPPED_RAIN; 0 = off
-CONF_RAIN_DELAY_MIRROR: Final = "rain_delay_mirror"  # bool; copy delays to devices
 
 # Forecast
 CONF_WEATHER_ENTITIES: Final = "weather_entities"  # list[str]; else [CONF_WEATHER_ENTITY]

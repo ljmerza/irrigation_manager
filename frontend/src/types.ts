@@ -64,7 +64,6 @@ export interface ScheduleConfig {
   rain_stop_during_run?: boolean;
   rain_stop_amount?: number;
   rain_delay_auto_hours?: number;
-  rain_delay_mirror?: boolean;
   // Forecast (v0.1 single entity, v0.2 list)
   weather_entity?: string;
   weather_entities?: string[];
