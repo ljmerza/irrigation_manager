@@ -251,6 +251,19 @@
           "ai_llmvision_provider": "Needed when a camera is picked."
         }
       },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Optional. Pick the events to be notified about and who gets them. Leave the events empty to turn notifications off.",
+        "data": {
+          "notify_events": "Notify when",
+          "notify_services": "Notify services",
+          "notify_entities": "Notify entities"
+        },
+        "data_description": {
+          "notify_services": "For example a mobile app (notify.mobile_app_…) or a persistent notification.",
+          "notify_entities": "Notify entities are sent the message with notify.send_message."
+        }
+      },
       "bhyve_disable": {
         "title": "Turn off the device program",
         "description": "The schedule is ready to save. The B-Hyve device still has its own program ({switch}), which would water the same zone again. Tick the box to turn that program off.",
@@ -287,7 +300,8 @@
       "describe_failed": "The AI task could not read the description: {error}",
       "disable_failed": "The B-Hyve program could not be turned off: {error}",
       "window_invalid": "The last run time must be after the first run time. The window can't cross midnight.",
-      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency."
+      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency.",
+      "notify_target_required": "Pick at least one notify service or entity, or clear the events."
     },
     "abort": {
       "no_legacy_helpers": "No legacy irrigation helpers were found.",
@@ -516,6 +530,19 @@
           "ai_camera_entity": "Optional. A snapshot is checked for lawn health with LLM Vision and added to the report.",
           "ai_llmvision_provider": "Needed when a camera is picked."
         }
+      },
+      "notifications": {
+        "title": "Notifications",
+        "description": "Optional. Pick the events to be notified about and who gets them. Leave the events empty to turn notifications off.",
+        "data": {
+          "notify_events": "Notify when",
+          "notify_services": "Notify services",
+          "notify_entities": "Notify entities"
+        },
+        "data_description": {
+          "notify_services": "For example a mobile app (notify.mobile_app_…) or a persistent notification.",
+          "notify_entities": "Notify entities are sent the message with notify.send_message."
+        }
       }
     },
     "error": {
@@ -544,7 +571,8 @@
       "ai_report_incomplete": "Pick both a report day and a report time, or neither.",
       "ai_provider_required": "Pick an LLM Vision provider to use a camera.",
       "window_invalid": "The last run time must be after the first run time. The window can't cross midnight.",
-      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency."
+      "moisture_trigger_hourly": "Watering on other days when a sensor is dry needs an every X days or days of the week frequency. Choose the other moisture mode, or change the frequency.",
+      "notify_target_required": "Pick at least one notify service or entity, or clear the events."
     }
   },
   "selector": {
@@ -612,6 +640,15 @@
       "options": {
         "delay": "Wait until clear, up to the longest delay",
         "skip": "Skip the run"
+      }
+    },
+    "notify_events": {
+      "options": {
+        "run_started": "Watering starts",
+        "run_finished": "Watering finishes",
+        "run_stopped": "Watering is stopped early (manually, by rain or by occupancy)",
+        "run_error": "Watering has an error or is interrupted",
+        "run_skipped": "Watering is skipped, for any reason (rain, forecast, moisture, temperature, wind, occupancy, rain delay, skip next, or the previous run still going)"
       }
     }
   },

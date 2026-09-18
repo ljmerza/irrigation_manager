@@ -9,6 +9,41 @@ Home Assistant custom integration for scheduled watering of `valve` and `switch`
 
 One config entry = one schedule. Add as many schedules as you want.
 
+## Features
+
+- **Schedules** ([setup](#adding-a-schedule)): one or more `valve` / `switch` zones with 1–180 minutes each, run one after another or all at once.
+  - Frequency: every N days, chosen days of the week, or every N hours between a first and last run time.
+  - Start at a fixed time, or finish a set time before or after sunrise or sunset.
+- **Setup options**: create manually, import the legacy watering helpers or a B-Hyve program, or describe the schedule in words to an AI task.
+- **Skip conditions** ([conditions](#conditions)):
+  - Rain: several sensors combined by max, median or quorum, over the last N hours or since the last watering.
+  - Rain forecast: chance and/or amount, with agreement across several weather entities.
+  - Temperature: freeze skip from the current reading or forecast low, heat skip from the current reading.
+  - Wind: a sensor's recent average.
+  - Occupancy: delay or skip while someone is in the yard.
+  - Soil moisture: water only when dry, or also water on other days when dry.
+  - Stale sensor hours for the temperature sensor.
+- **Stop during a run** when rain starts or someone walks into the yard.
+- **Device-aware zone control** ([run time per device](#run-time-per-device)):
+  - Native run durations for B-Hyve and Rachio.
+  - Every close is checked against the entity state, and zones that fail to close are retried until they close, across restarts too.
+  - Zones are closed on shutdown, and a run interrupted by a restart has its zones closed on the next start.
+- **Manual control** ([rain delay, pause and manual runs](#rain-delay-pause-and-manual-runs)):
+  - Run now, run one zone, skip next, stop.
+  - Rain delay (manual or automatic after a rain skip).
+  - Pause, resume and stop all schedules.
+  - Check now: the current condition readings.
+- **Notifications** ([notifications](#notifications-optional)): when watering starts, finishes, is stopped early, has an error or is skipped for any reason, sent to `notify.*` services, persistent notifications or `notify.*` entities.
+- **AI (optional)** ([AI report](#ai-report-optional)): a weekly report through an `ai_task` entity, optional camera lawn analysis through LLM Vision, and skip explanations.
+- **Entities** ([entities](#entities-per-schedule)): per schedule, an enable switch, status, next run, rain delay, last run and current zone sensors, a problem binary sensor, per-zone run time numbers, and control buttons.
+- **Automations and API**:
+  - [Services](#services) for every action, some returning the schedule's state or history.
+  - [`irrigation_manager_event` events, device triggers and device conditions](#events-device-triggers-and-conditions).
+  - [Blueprints](#blueprints): notify on skip or error, stop while an entity is on, skip next when an entity is on.
+- **Voice** ([voice](#voice)): Assist intents for run now, skip next, stop and status.
+- **Sidebar panel** ([sidebar panel](#sidebar-panel)): every schedule with its status, controls, condition readings and history.
+- **Run and skip history** (up to 100 records, kept across restarts) and a [diagnostics](#diagnostics) download.
+
 ## Install
 
 ### HACS (custom repository)
@@ -49,6 +84,7 @@ Docker bind mount example:
 5. **Start time**: a fixed time, or relative to sunrise/sunset. For sunrise/sunset the offset is when watering **finishes**: start = event − total run time − offset. A negative offset finishes after the event. Sun times come from Home Assistant's configured location. Not asked for every-N-hours schedules, which start at the first run time.
 6. **Conditions**: any combination, each with its own step (see below), plus **stale sensor hours**.
 7. **AI report**: shown when an `ai_task` entity exists; every field is optional.
+8. **Notifications**: which run events (start, finish, early stop, error, skip) to be notified about, and who gets them (see below).
 
 **Every N hours** runs every day at the first run time, then every N hours while the start is no later than the last run time. The last run time only gets a run when the hours line up: 06:00 every 3 hours until 18:00 runs at 06:00, 09:00, 12:00, 15:00 and 18:00; until 17:00 the last run is at 15:00. Conditions are checked before every run. Moisture *trigger* mode can't be used with it, because every day is already a schedule day.
 
@@ -137,6 +173,21 @@ Set in the **AI report** step:
 
 The report sends the schedule's settings, run and skip history, rain totals, moisture readings and next run to the AI task. Reports can also be generated from the panel (**Weekly report**, **Explain skips**) or with the `generate_report` and `explain_skips` services. AI never changes a schedule. A cloud AI task sends this data to its provider; a local one, such as Ollama, keeps it on your network.
 
+## Notifications (optional)
+
+Set in the **Notifications** step, per schedule:
+
+- **Notify when**: any of
+  - **Watering starts** (scheduled or manual).
+  - **Watering finishes**: every zone ran to its end.
+  - **Watering is stopped early**: stopped manually (panel, `stop` service, Assist), by rain or by occupancy.
+  - **Watering has an error or is interrupted**: a zone failed to start or stop, a zone may still be open, or a Home Assistant restart or reload cut the run short. The message lists each zone's error.
+  - **Watering is skipped**, for any reason: rain, forecast, soil moisture, temperature, wind, occupancy, rain delay, skip next, or the previous run still going. The message gives the reason. A disabled or paused schedule doesn't record skips, so it doesn't send them.
+- **Notify services**: `persistent_notification.create` or legacy `notify.*` services, for example `notify.mobile_app_phone`.
+- **Notify entities**: `notify.*` entities; the message is sent with `notify.send_message`.
+
+The notification title is the schedule's name. Pick at least one service or entity when an event is picked; leave **Notify when** empty to turn notifications off. A target that fails is logged and the others are still sent. For other targets or custom text, use the device triggers or the blueprint below.
+
 ## Entities (per schedule)
 
 | Entity | Purpose |
@@ -206,7 +257,7 @@ Assist intents: run now (optionally for N minutes), skip next, stop, and status,
 
 ## Diagnostics
 
-**Settings → Devices & services → Irrigation Manager → ⋮ → Download diagnostics** gives the schedule's config (with the notification service redacted), current state, history and the driver chosen for each zone.
+**Settings → Devices & services → Irrigation Manager → ⋮ → Download diagnostics** gives the schedule's config (with the notification services and entities redacted), current state, history and the driver chosen for each zone.
 
 ## Sidebar panel
 

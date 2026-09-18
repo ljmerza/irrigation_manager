@@ -1,7 +1,7 @@
 """Config and options flows for Irrigation Manager.
 
 One config entry per schedule. Both flows walk the same steps — zones, run
-time, frequency, start time, conditions, AI reports — through
+time, frequency, start time, conditions, AI reports, run notifications — through
 ScheduleFlowMixin. The config flow starts with a menu: create manually, import
 the legacy helpers, import a B-Hyve program, or describe the schedule to an AI
 task. Imports and descriptions only fill in defaults; every value still goes
@@ -73,6 +73,9 @@ from .const import (
     CONF_MOISTURE_THRESHOLD,
     CONF_MOISTURE_UNAVAILABLE,
     CONF_NAME,
+    CONF_NOTIFY_ENTITIES,
+    CONF_NOTIFY_EVENTS,
+    CONF_NOTIFY_SERVICES,
     CONF_OCCUPANCY_ACTION,
     CONF_OCCUPANCY_ENTITIES,
     CONF_OCCUPANCY_MAX_DELAY,
@@ -140,6 +143,7 @@ from .const import (
     ForecastMode,
     MoistureMode,
     MoistureUnavailable,
+    NotifyEvent,
     OccupancyAction,
     RainAggregate,
     RainWindow,
@@ -178,6 +182,7 @@ DEFAULT_OCCUPANCY_STOP_DURING_RUN = True
 
 AI_TASK_DOMAIN = "ai_task"
 NOTIFY_DOMAIN = "notify"
+NOTIFY_SEND_MESSAGE = "send_message"
 LLMVISION_DOMAIN = "llmvision"
 PERSISTENT_NOTIFICATION_SERVICE = "persistent_notification.create"
 
@@ -345,8 +350,8 @@ class ScheduleFlowMixin:
     """Steps shared by the config and options flows, from zones onward.
 
     The name step fills self._config[CONF_NAME] and continues with
-    async_step_zones; after the last condition step comes the AI step, then
-    _async_finish.
+    async_step_zones; after the last condition step come the AI and
+    notifications steps, then _async_finish.
     """
 
     hass: HomeAssistant
@@ -1066,7 +1071,7 @@ class ScheduleFlowMixin:
         if not self.hass.states.async_entity_ids(AI_TASK_DOMAIN):
             # Nothing to pick. Existing AI settings are kept, in case the AI
             # task integration is only temporarily not loaded.
-            return await self._async_finish()
+            return await self.async_step_notifications()
 
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -1074,7 +1079,7 @@ class ScheduleFlowMixin:
             if entity is None:
                 for key in _AI_KEYS:
                     self._config.pop(key, None)
-                return await self._async_finish()
+                return await self.async_step_notifications()
             weekday = user_input.get(CONF_AI_REPORT_WEEKDAY)
             report_time = user_input.get(CONF_AI_REPORT_TIME)
             camera = user_input.get(CONF_AI_CAMERA) or None
@@ -1094,7 +1099,7 @@ class ScheduleFlowMixin:
                 )
                 self._set(CONF_AI_CAMERA, camera)
                 self._set(CONF_AI_LLMVISION_PROVIDER, provider if camera else None)
-                return await self._async_finish()
+                return await self.async_step_notifications()
 
         weekday = self._default(CONF_AI_REPORT_WEEKDAY)
         schema = vol.Schema(
@@ -1125,14 +1130,79 @@ class ScheduleFlowMixin:
         return self.async_show_form(step_id="ai", data_schema=schema, errors=errors)
 
     def _notify_services(self) -> list[str]:
+        # notify.send_message needs an entity target, which reports don't send.
         services = [PERSISTENT_NOTIFICATION_SERVICE]
         services += sorted(
             f"{NOTIFY_DOMAIN}.{service}"
             for service in self.hass.services.async_services_for_domain(NOTIFY_DOMAIN)
+            if service != NOTIFY_SEND_MESSAGE
         )
         # Keep a stored service selectable even if it's no longer registered.
         if (current := self._config.get(CONF_AI_NOTIFY_SERVICE)) and current not in services:
             services.append(current)
+        return services
+
+    # --- notifications ------------------------------------------------------
+
+    async def async_step_notifications(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            chosen = set(user_input.get(CONF_NOTIFY_EVENTS) or [])
+            events = [event.value for event in NotifyEvent if event.value in chosen]
+            services = _unique(user_input.get(CONF_NOTIFY_SERVICES))
+            entities = _unique(user_input.get(CONF_NOTIFY_ENTITIES))
+            if events and not services and not entities:
+                errors["base"] = "notify_target_required"
+            else:
+                # Without events, notifications are off and no targets are kept.
+                self._set(CONF_NOTIFY_EVENTS, events or None)
+                self._set(CONF_NOTIFY_SERVICES, services if events and services else None)
+                self._set(CONF_NOTIFY_ENTITIES, entities if events and entities else None)
+                return await self._async_finish()
+
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_NOTIFY_EVENTS,
+                    default=list(self._default(CONF_NOTIFY_EVENTS, [])),
+                ): _select_selector(
+                    [event.value for event in NotifyEvent], CONF_NOTIFY_EVENTS, multiple=True
+                ),
+                _optional(
+                    CONF_NOTIFY_SERVICES, self._default(CONF_NOTIFY_SERVICES)
+                ): SelectSelector(
+                    SelectSelectorConfig(
+                        options=self._notify_target_services(),
+                        multiple=True,
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+                _optional(
+                    CONF_NOTIFY_ENTITIES, self._default(CONF_NOTIFY_ENTITIES)
+                ): _entity_selector(NOTIFY_DOMAIN, multiple=True),
+            }
+        )
+        return self.async_show_form(
+            step_id="notifications", data_schema=schema, errors=errors
+        )
+
+    def _notify_target_services(self) -> list[str]:
+        """Legacy notify services. notify.send_message needs an entity target,
+        so notify entities are picked separately."""
+        services = [PERSISTENT_NOTIFICATION_SERVICE]
+        services += sorted(
+            f"{NOTIFY_DOMAIN}.{service}"
+            for service in self.hass.services.async_services_for_domain(NOTIFY_DOMAIN)
+            if service != NOTIFY_SEND_MESSAGE
+        )
+        # Keep stored services selectable even if they're no longer registered.
+        services += [
+            service
+            for service in self._config.get(CONF_NOTIFY_SERVICES) or []
+            if service not in services
+        ]
         return services
 
 

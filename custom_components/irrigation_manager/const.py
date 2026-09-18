@@ -312,3 +312,21 @@ STATE_POLL_SECONDS: Final = 5
 # After a stop, how long to wait for the entity to read off before treating
 # the close as failed. Also the minimum gap between two retried stops.
 STOP_SETTLE_SECONDS: Final = 15
+
+# --- run notifications -----------------------------------------------------
+# Messages sent when a run starts, ends or fails, to notify services
+# ("notify.<name>", "persistent_notification.create") and notify entities
+# (through notify.send_message). No events stored = off.
+CONF_NOTIFY_EVENTS: Final = "notify_events"  # list[NotifyEvent value]
+CONF_NOTIFY_SERVICES: Final = "notify_services"  # list[str]
+CONF_NOTIFY_ENTITIES: Final = "notify_entities"  # list[str] notify.*
+
+
+class NotifyEvent(StrEnum):
+    """Run outcomes a schedule can send a notification for."""
+
+    RUN_STARTED = "run_started"
+    RUN_FINISHED = "run_finished"  # every zone ran to its end
+    RUN_STOPPED = "run_stopped"  # stopped early: manually, by rain or by occupancy
+    RUN_ERROR = "run_error"  # a zone failed or may be open, or the run was interrupted
+    RUN_SKIPPED = "run_skipped"  # any recorded skip (every Status.SKIPPED_*)

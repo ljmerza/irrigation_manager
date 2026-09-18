@@ -7,11 +7,17 @@ from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.config_entries import ConfigEntry, ConfigEntryState
 from homeassistant.core import HomeAssistant
 
-from .const import CONF_AI_NOTIFY_SERVICE, merged_config, zone_entity_ids
+from .const import (
+    CONF_AI_NOTIFY_SERVICE,
+    CONF_NOTIFY_ENTITIES,
+    CONF_NOTIFY_SERVICES,
+    merged_config,
+    zone_entity_ids,
+)
 from .drivers import async_get_driver
 
-# Notify service names usually carry a person's or phone's name.
-TO_REDACT = {CONF_AI_NOTIFY_SERVICE}
+# Notify service and entity names usually carry a person's or phone's name.
+TO_REDACT = {CONF_AI_NOTIFY_SERVICE, CONF_NOTIFY_SERVICES, CONF_NOTIFY_ENTITIES}
 
 
 async def async_get_config_entry_diagnostics(

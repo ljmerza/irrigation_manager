@@ -2,6 +2,11 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [Unreleased]
+
+### Added
+- Run notifications, per schedule: a new **Notifications** step picks which events to notify about (watering starts, finishes, is stopped early, has an error, or is skipped for any reason) and who gets them: `notify.*` services, `persistent_notification.create` and `notify.*` entities.
+
 ## [0.2.0] — 2026-09-15
 
 Adds rain and weather conditions, automations and API, AI reports, and migration from existing setups.

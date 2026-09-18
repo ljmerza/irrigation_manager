@@ -377,6 +377,14 @@ async def options_menu(hass: HomeAssistant, result: dict[str, Any], option: str)
     )
 
 
+async def skip_notifications(
+    hass: HomeAssistant, result: dict[str, Any], submit: Any = configure
+) -> dict[str, Any]:
+    """Accept the notifications step's defaults: no notifications."""
+    assert result["step_id"] == "notifications", result.get("errors")
+    return await submit(hass, result, {})
+
+
 async def walk_to_conditions(
     hass: HomeAssistant,
     result: dict[str, Any],
@@ -479,6 +487,7 @@ async def test_interval_fixed_time_single_zone(hass: HomeAssistant) -> None:
 
     # No ai_task entity: the AI step is skipped.
     result = await configure(hass, result, {"skip_conditions": []})
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == "Front lawn"
     assert result["data"] == {
@@ -523,6 +532,7 @@ async def test_hourly_window_skips_start_menu(hass: HomeAssistant) -> None:
     )
     assert result["step_id"] == "conditions"  # no start-time menu
     result = await configure(hass, result, {"skip_conditions": []})
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {
         "name": "Beds",
@@ -595,6 +605,7 @@ async def test_options_switch_to_hourly_and_back(hass: HomeAssistant) -> None:
     )
     assert result["step_id"] == "conditions"
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     # Weekdays and the sunrise offset are gone.
     assert entry.options == {
@@ -619,6 +630,7 @@ async def test_options_switch_to_hourly_and_back(hass: HomeAssistant) -> None:
     assert schema_default(result, "start_time") == "07:00:00"
     result = await options_configure(hass, result, {})
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     # The hourly keys are gone.
     assert entry.options == {
@@ -653,6 +665,7 @@ async def test_hourly_rejects_moisture_trigger_mode(hass: HomeAssistant) -> None
     assert result["errors"] == {"moisture_mode": "moisture_trigger_hourly"}
 
     result = await options_configure(hass, result, {"moisture_mode": "skip"})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["frequency"] == "hourly"
     assert entry.options["moisture_mode"] == "skip"
@@ -755,6 +768,7 @@ async def test_every_v02_setting(hass: HomeAssistant) -> None:
             "occupancy_max_delay_minutes": 45,
         },
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == V02_CONFIG
 
@@ -778,6 +792,7 @@ async def test_condition_steps_skip_unselected(hass: HomeAssistant) -> None:
     result = await configure(hass, result, CONDITION_INPUT["rain"])
     assert result["step_id"] == "moisture"
     result = await configure(hass, result, CONDITION_INPUT["moisture"])
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["skip_conditions"] == ["rain", "moisture"]
@@ -880,6 +895,7 @@ async def test_rain_threshold_nan_rejected_then_minimum_accepted(hass: HomeAssis
     assert result["errors"] == {"rain_threshold": "rain_threshold_invalid"}
 
     result = await configure(hass, result, rain_input(0.01))
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"]["rain_threshold"] == 0.01
 
@@ -920,6 +936,7 @@ async def test_rain_validation_branches(hass: HomeAssistant) -> None:
             "rain_stop_amount": 0,
         },
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["rain_aggregate"] == "median"
@@ -965,6 +982,7 @@ async def test_threshold_minimum_enforced(hass: HomeAssistant, flow: str, condit
     assert result["errors"] == {field: error}
 
     result = await submit(hass, result, {**other, field: 1})
+    result = await skip_notifications(hass, result, submit)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"][field] == 1
     assert result["data"]["skip_conditions"] == [condition]
@@ -1002,6 +1020,7 @@ async def test_forecast_validation_branches(hass: HomeAssistant) -> None:
             "forecast_amount": 0.3,
         },
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["forecast_mode"] == "amount"
@@ -1046,6 +1065,7 @@ async def test_temperature_validation_branches(hass: HomeAssistant) -> None:
         result,
         {"temperature_min": 2, "weather_entities": ["weather.home"], "temperature_forecast_hours": 12},
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["temperature_min"] == 2.0
@@ -1063,6 +1083,7 @@ async def test_wind_validation(hass: HomeAssistant) -> None:
     assert result["errors"] == {"wind_max": "wind_max_invalid"}
 
     result = await configure(hass, result, CONDITION_INPUT["wind"])
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert {key: result["data"][key] for key in ("wind_sensor", "wind_max", "wind_minutes")} == {
         "wind_sensor": "sensor.wind_speed",
@@ -1085,6 +1106,7 @@ async def test_occupancy_validation_and_skip_action(hass: HomeAssistant) -> None
             "occupancy_stop_during_run": False,
         },
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["occupancy_action"] == "skip"
@@ -1101,6 +1123,7 @@ async def test_ai_step_validation_and_save(hass: HomeAssistant) -> None:
         return None
 
     hass.services.async_register("notify", "iphone", _notify)
+    hass.services.async_register("notify", "send_message", _notify)
 
     result = await start_create(hass)
     result = await configure(hass, result, {"name": "Beds"})
@@ -1131,6 +1154,7 @@ async def test_ai_step_validation_and_save(hass: HomeAssistant) -> None:
             "ai_llmvision_provider": "llmvision_entry",
         },
     )
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert {key: value for key, value in result["data"].items() if key.startswith("ai_")} == AI_SETTINGS
 
@@ -1147,6 +1171,7 @@ async def test_options_empty_ai_task_removes_ai_settings(hass: HomeAssistant) ->
     assert "notify.iphone" in schema_selector(result, "ai_notify_service").config["options"]
 
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == BASIC_CONFIG
 
@@ -1155,6 +1180,7 @@ async def test_options_without_ai_task_keeps_ai_settings(hass: HomeAssistant) ->
     entry = await setup_entry(hass, title="Beds", data={**BASIC_CONFIG, **AI_SETTINGS})
     result = await options_walk_defaults(hass, entry, "interval", "start_time")
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {**BASIC_CONFIG, **AI_SETTINGS}
 
@@ -1195,6 +1221,7 @@ async def test_import_legacy_helpers_prefills_steps(hass: HomeAssistant) -> None
         assert schema_default(result, "rain_threshold") == 0.1
         result = await configure(hass, result, {"rain_sensors": ["sensor.weather_station_rain_in"]})
 
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {
         "name": "Drip irrigation",
@@ -1222,6 +1249,7 @@ async def test_import_legacy_threshold_not_stored_without_rain(hass: HomeAssista
         result = await configure(hass, result, {})
         result = await walk_to_conditions(hass, result, configure, menu)
         result = await configure(hass, result, {"skip_conditions": []})
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert "rain_threshold" not in result["data"]
 
@@ -1258,7 +1286,7 @@ async def bhyve_to_final_step(
     result = await configure(hass, result, {"skip_conditions": []})
     if result.get("step_id") == "ai":  # only shown when an ai_task entity exists
         result = await configure(hass, result, {})
-    return result
+    return await skip_notifications(hass, result)
 
 
 BHYVE_DATA = {**BHYVE_SUPPORTED["config"], "skip_conditions": []}
@@ -1366,6 +1394,7 @@ async def test_describe_prefills_steps_and_shows_warnings(hass: HomeAssistant) -
     # The AI task used for the description is offered, not saved.
     assert schema_suggested(result, "ai_task_entity") == AI_TASK
     result = await configure(hass, result, {})
+    result = await skip_notifications(hass, result, configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     data = result["data"]
     assert data["rain_sensors"] == ["sensor.weather_station_rain_in"]
@@ -1429,6 +1458,7 @@ async def test_options_change_frequency_drop_condition_rename(hass: HomeAssistan
             "moisture_unavailable": "water",
         },
     )
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
 
@@ -1482,6 +1512,7 @@ async def test_options_switch_start_mode_drops_other_keys(hass: HomeAssistant) -
     assert schema_default(result, "sun_offset_minutes") == -15
     result = await options_configure(hass, result, {"sun_offset_minutes": 0})
     result = await options_configure(hass, result, {"skip_conditions": []})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.title == "Front lawn"
     assert entry.options == {
@@ -1573,6 +1604,7 @@ async def test_garden_bed_v01_config_round_trips(hass: HomeAssistant) -> None:
         "forecast_quorum": 1,
     }
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
     expected = {
@@ -1609,6 +1641,7 @@ async def test_options_deselect_removes_every_condition_key(hass: HomeAssistant)
     )
     assert result["step_id"] == "moisture"
     result = await options_configure(hass, result, {})
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {
         "name": "Front lawn",
@@ -1645,9 +1678,68 @@ async def test_options_temperature_keeps_weather_entities_when_forecast_dropped(
             "weather_entities": V02_CONFIG["weather_entities"],
         },
     )
+    result = await skip_notifications(hass, result, options_configure)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options["weather_entities"] == V02_CONFIG["weather_entities"]
     assert not {"forecast_mode", "forecast_probability", "temperature_max"} & entry.options.keys()
+
+
+# --- notifications step ------------------------------------------------------------
+
+NOTIFY_SETTINGS: dict[str, Any] = {
+    "notify_events": ["run_started", "run_stopped", "run_error"],
+    "notify_services": ["notify.iphone"],
+    "notify_entities": ["notify.kitchen_display"],
+}
+
+
+async def test_notifications_step_validation_and_save(hass: HomeAssistant) -> None:
+    async def _service(call: ServiceCall) -> None:
+        return None
+
+    hass.services.async_register("notify", "iphone", _service)
+    hass.services.async_register("notify", "send_message", _service)
+
+    result = await start_create(hass)
+    result = await configure(hass, result, {"name": "Beds"})
+    result = await walk_to_conditions(hass, result, configure, menu)
+    result = await configure(hass, result, {"skip_conditions": []})
+    assert result["step_id"] == "notifications"
+    # send_message needs an entity target, so it's not offered as a service.
+    assert schema_selector(result, "notify_services").config["options"] == [
+        "persistent_notification.create",
+        "notify.iphone",
+    ]
+
+    result = await configure(hass, result, {"notify_events": ["run_error"]})
+    assert result["errors"] == {"base": "notify_target_required"}
+
+    # Events are stored in NotifyEvent order, whatever order they were picked in.
+    result = await configure(
+        hass,
+        result,
+        {**NOTIFY_SETTINGS, "notify_events": ["run_error", "run_started", "run_stopped"]},
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert {key: value for key, value in result["data"].items() if key.startswith("notify_")} == NOTIFY_SETTINGS
+
+
+async def test_options_notifications_prefill_and_clear(hass: HomeAssistant) -> None:
+    entry = await setup_entry(hass, title="Beds", data={**BASIC_CONFIG, **NOTIFY_SETTINGS})
+    result = await options_walk_defaults(hass, entry, "interval", "start_time")
+    result = await options_configure(hass, result, {})
+    assert result["step_id"] == "notifications"
+    assert schema_default(result, "notify_events") == NOTIFY_SETTINGS["notify_events"]
+    assert schema_suggested(result, "notify_entities") == ["notify.kitchen_display"]
+    # A stored notify service stays selectable even though it isn't registered.
+    assert "notify.iphone" in schema_selector(result, "notify_services").config["options"]
+
+    # No events turns notifications off and drops the targets too.
+    result = await options_configure(
+        hass, result, {"notify_events": [], "notify_services": ["notify.iphone"]}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options == BASIC_CONFIG
 
 
 # --- strings ------------------------------------------------------------------
@@ -1760,6 +1852,10 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
     assert result["step_id"] == "ai"
     result = await c(result, {"ai_task_entity": AI_TASK, "ai_report_weekday": "1"})
     result = await c(result, {})
+    assert result["step_id"] == "notifications"
+    result = await c(result, {"notify_events": ["run_started"]})
+    assert result["errors"] == {"base": "notify_target_required"}
+    result = await c(result, {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
     result = await m(await start_flow(hass), "create")
@@ -1815,7 +1911,7 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
             "user", "name", "zones", "zone_minutes", "frequency", "weekdays", "interval",
             "start", "start_time", "start_sunset", "start_sunrise", "conditions", "rain",
             "forecast", "moisture", "temperature", "wind", "occupancy", "ai",
-            "import_legacy", "import_bhyve", "describe", "bhyve_disable", "hourly",
+            "notifications", "import_legacy", "import_bhyve", "describe", "bhyve_disable", "hourly",
         )
     } <= shown
     assert ("config", "no_bhyve_programs") not in shown  # aborts carry reason, not step_id

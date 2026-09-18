@@ -16,6 +16,9 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry, async_
 from custom_components.irrigation_manager.const import (
     CONF_AI_NOTIFY_SERVICE,
     CONF_AI_TASK_ENTITY,
+    CONF_NOTIFY_ENTITIES,
+    CONF_NOTIFY_EVENTS,
+    CONF_NOTIFY_SERVICES,
     CONF_ZONES,
     DOMAIN,
 )
@@ -42,6 +45,9 @@ def make_config() -> dict[str, Any]:
         ],
         CONF_AI_TASK_ENTITY: "ai_task.claude_ai_task",
         CONF_AI_NOTIFY_SERVICE: "notify.mobile_app_personal_phone",
+        CONF_NOTIFY_EVENTS: ["run_error"],
+        CONF_NOTIFY_SERVICES: ["notify.mobile_app_personal_phone"],
+        CONF_NOTIFY_ENTITIES: ["notify.personal_display"],
     }
 
 
@@ -71,6 +77,10 @@ async def test_diagnostics_for_loaded_schedule(hass: HomeAssistant) -> None:
     assert data["entry"]["data"][CONF_AI_NOTIFY_SERVICE] == REDACTED
     assert data["entry"]["data"][CONF_AI_TASK_ENTITY] == "ai_task.claude_ai_task"
     assert data["snapshot"]["config"][CONF_AI_NOTIFY_SERVICE] == REDACTED
+    for key in (CONF_NOTIFY_SERVICES, CONF_NOTIFY_ENTITIES):
+        assert data["entry"]["data"][key] == REDACTED
+        assert data["snapshot"]["config"][key] == REDACTED
+    assert data["entry"]["data"][CONF_NOTIFY_EVENTS] == ["run_error"]
     assert data["history"] == [{"type": "run", "status": "idle", "total_minutes": 40}]
     assert data["zones"] == {
         ZONE_PLAIN: {"driver": "ZoneDriver", "native_duration": False, "state": "closed"},

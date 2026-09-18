@@ -37,6 +37,9 @@ from custom_components.irrigation_manager.const import (
     CONF_INTERVAL_HOURS,
     CONF_MOISTURE_MODE,
     CONF_NAME,
+    CONF_NOTIFY_ENTITIES,
+    CONF_NOTIFY_EVENTS,
+    CONF_NOTIFY_SERVICES,
     CONF_OCCUPANCY_ENTITIES,
     CONF_OCCUPANCY_MAX_DELAY,
     CONF_OCCUPANCY_STOP_DURING_RUN,
@@ -63,8 +66,14 @@ from custom_components.irrigation_manager.const import (
     SIGNAL_SCHEDULES_CHANGED,
     STORAGE_KEY_FMT,
     STORAGE_VERSION,
+    NotifyEvent,
     Status,
     merged_config,
+)
+from custom_components.irrigation_manager.notifications import (
+    _SKIP_REASONS,
+    ended_message,
+    skipped_message,
 )
 from custom_components.irrigation_manager.runner import (
     ScheduleRunner,
@@ -1940,3 +1949,187 @@ async def test_native_zone_without_update_entity_stops_after_the_grace(
     assert not runner.running
     assert runner.zone_results[0]["stopped_by"] == "manager"
     assert runner.zone_results[0]["minutes"] == 10.5
+
+
+# --- run notifications ------------------------------------------------------------
+
+PHONE = "notify.phone"
+DISPLAY = "notify.kitchen_display"
+
+
+def notify_config(*events: str) -> dict[str, Any]:
+    return make_config(
+        **{
+            CONF_NOTIFY_EVENTS: list(events),
+            CONF_NOTIFY_SERVICES: [PHONE],
+            CONF_NOTIFY_ENTITIES: [DISPLAY],
+        }
+    )
+
+
+def notify_mocks(hass: HomeAssistant) -> tuple[list[ServiceCall], list[ServiceCall]]:
+    hass.states.async_set(ZONE_A, "closed", {"friendly_name": "Deck"})
+    hass.states.async_set(ZONE_B, "off", {"friendly_name": "Beds"})
+    return (
+        async_mock_service(hass, "notify", "phone"),
+        async_mock_service(hass, "notify", "send_message"),
+    )
+
+
+async def test_notifies_start_and_finish_to_services_and_entities(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, send_message = notify_mocks(hass)
+    runner = await make_runner(notify_config("run_started", "run_finished"))
+
+    await runner.async_run_now()
+    await settle(hass)
+    started = "Started watering Deck, Beds (manual run)."
+    assert [call.data for call in phone] == [{"title": "Front lawn", "message": started}]
+    assert [call.data for call in send_message] == [
+        {"entity_id": DISPLAY, "title": "Front lawn", "message": started}
+    ]
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 15))
+    assert not runner.running
+    assert [call.data["message"] for call in phone] == [started, "Finished watering after 15 min."]
+    assert len(send_message) == 2
+
+
+async def test_scheduled_start_is_not_marked_manual(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, _ = notify_mocks(hass)
+    await make_runner(notify_config("run_started"))
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    assert [call.data["message"] for call in phone] == ["Started watering Deck, Beds."]
+
+
+async def test_manual_stop_notifies_stopped_not_finished(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, _ = notify_mocks(hass)
+    runner = await make_runner(notify_config("run_finished", "run_stopped"))
+
+    await runner.async_run_now()
+    await settle(hass)
+    assert phone == []  # run_started isn't picked
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 3))
+    await runner.async_stop_run()
+    await settle(hass)
+    assert [call.data["message"] for call in phone] == [
+        "Stopped watering early (stopped manually) after 3 min."
+    ]
+
+
+async def test_zone_failure_notifies_error_with_the_reason(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, decide, make_runner
+) -> None:
+    phone, _ = notify_mocks(hass)
+    async_mock_service(hass, "valve", "open_valve", raise_exception=HomeAssistantError("boom"))
+    flaky_service(hass, "valve", "close_valve", 0, sets="closed")
+    async_mock_service(hass, "switch", "turn_on")
+    async_mock_service(hass, "switch", "turn_off")
+    runner = await make_runner(notify_config("run_finished", "run_error"))
+
+    await runner.async_run_now()
+    await settle(hass)
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 5))
+    assert runner.status is Status.ERROR
+    assert len(phone) == 1
+    message = phone[0].data["message"]
+    assert message.startswith("Watering error.\nDeck: ")
+    assert "boom" in message
+
+
+async def test_failing_notify_target_does_not_block_the_others(
+    hass: HomeAssistant, calls, decide, make_runner, caplog: pytest.LogCaptureFixture
+) -> None:
+    notify_mocks(hass)
+    async_mock_service(hass, "notify", "phone", raise_exception=HomeAssistantError("offline"))
+    send_message = async_mock_service(hass, "notify", "send_message")
+    runner = await make_runner(notify_config("run_started"))
+
+    await runner.async_run_now()
+    await settle(hass)
+    assert runner.running
+    assert len(send_message) == 1
+    assert "notification via notify.phone failed: offline" in caplog.text
+
+
+async def test_no_notifications_without_events(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, send_message = notify_mocks(hass)
+    await make_runner(notify_config())
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    await advance_to(hass, freezer, local(2026, 9, 14, 6, 15))
+    assert phone == [] and send_message == []
+
+
+def test_ended_messages_for_early_stops_and_interruptions(hass: HomeAssistant) -> None:
+    hass.states.async_set(ZONE_A, "open", {"friendly_name": "Deck"})
+    assert (
+        ended_message(hass, NotifyEvent.RUN_STOPPED, Status.STOPPED_RAIN, [], [], 4.5)
+        == "Stopped watering early (rain started) after 4.5 min."
+    )
+    assert (
+        ended_message(hass, NotifyEvent.RUN_STOPPED, Status.STOPPED_OCCUPANCY, [], [], 2)
+        == "Stopped watering early (an occupancy entity turned on) after 2 min."
+    )
+    assert ended_message(
+        hass, NotifyEvent.RUN_ERROR, Status.INTERRUPTED, [], [ZONE_A], 7.0
+    ) == (
+        "Watering error.\n"
+        "The run was interrupted by a Home Assistant restart or reload after 7 min.\n"
+        "May still be open: Deck."
+    )
+
+
+async def test_condition_skip_notifies_with_the_reason(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, send_message = notify_mocks(hass)
+    decide.return_value = Decision(water=False, status=Status.SKIPPED_RAIN, details={"rain": {"total": 0.4}})
+    await make_runner(notify_config("run_skipped"))
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    assert [call.data for call in phone] == [
+        {"title": "Front lawn", "message": "Skipped watering (recent rain)."}
+    ]
+    assert len(send_message) == 1
+
+
+async def test_skip_next_notifies_skip(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, _ = notify_mocks(hass)
+    runner = await make_runner(notify_config("run_skipped"))
+    await runner.async_set_skip_next(True)
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    assert [call.data["message"] for call in phone] == ["Skipped watering (skip next was set)."]
+
+
+async def test_busy_skip_notifies_skip(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    phone, _ = notify_mocks(hass)
+    runner = await make_runner(notify_config("run_skipped"))
+    await runner.async_run_now(minutes=45)  # 05:00–06:30, over the 06:00 start
+    await settle(hass)
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 6))
+    assert runner.running
+    assert [call.data["message"] for call in phone] == [
+        "Skipped watering (the previous run was still going)."
+    ]
+
+
+def test_every_skip_status_has_its_own_reason() -> None:
+    for status in Status:
+        if status.value.startswith("skipped_"):
+            assert skipped_message(status) in {
+                f"Skipped watering ({reason})." for reason in _SKIP_REASONS.values()
+            }, status

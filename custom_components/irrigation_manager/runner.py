@@ -45,6 +45,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.sun import get_astral_event_date
 from homeassistant.util import dt as dt_util
 
+from . import notifications
 from .conditions import Decision, async_decide
 from .const import (
     CONF_ANCHOR,
@@ -91,6 +92,7 @@ from .const import (
     STORAGE_VERSION,
     EventType,
     MoistureMode,
+    NotifyEvent,
     SkipCondition,
     Status,
     merged_config,
@@ -521,6 +523,8 @@ class ScheduleRunner:
         details = {"skipped_busy_at": _iso(occurrence.start)}
         self._add_history(_skip_record(Status.SKIPPED_BUSY, details))
         self._fire(EventType.SKIPPED, status=Status.SKIPPED_BUSY.value, details=details)
+        if notifications.notify_enabled(self.config, NotifyEvent.RUN_SKIPPED):
+            self._send_notification(notifications.skipped_message(Status.SKIPPED_BUSY))
 
     async def _async_record_skip(
         self, status: Status, details: Mapping[str, Any]
@@ -528,6 +532,8 @@ class ScheduleRunner:
         self._set_status(status, details)
         self._add_history(_skip_record(status, details))
         self._fire(EventType.SKIPPED, status=status.value, details=copy.deepcopy(dict(details)))
+        if notifications.notify_enabled(self.config, NotifyEvent.RUN_SKIPPED):
+            self._send_notification(notifications.skipped_message(status))
         await self._async_save()
 
     # --- running --------------------------------------------------------------
@@ -561,6 +567,12 @@ class ScheduleRunner:
             manual=manual,
             zones=[entity_id for entity_id, _ in zones],
         )
+        if notifications.notify_enabled(self.config, NotifyEvent.RUN_STARTED):
+            self._send_notification(
+                notifications.started_message(
+                    self.hass, [entity_id for entity_id, _ in zones], manual=manual
+                )
+            )
         self._run_task = self.hass.async_create_background_task(
             self._async_run(zones, concurrent),
             name=f"{DOMAIN} run {self.entry.entry_id}",
@@ -854,6 +866,23 @@ class ScheduleRunner:
             }
         )
         self._fire(EventType.RUN_FINISHED, status=outcome.value, total_minutes=total)
+        if errored or outcome is Status.INTERRUPTED or self._unclosed:
+            notify_event = NotifyEvent.RUN_ERROR
+        elif self._stop_reason is not None:  # IDLE = stopped by the user
+            notify_event = NotifyEvent.RUN_STOPPED
+        else:
+            notify_event = NotifyEvent.RUN_FINISHED
+        if notifications.notify_enabled(self.config, notify_event):
+            self._send_notification(
+                notifications.ended_message(
+                    self.hass,
+                    notify_event,
+                    outcome,
+                    self._zone_results,
+                    sorted(self._unclosed),
+                    total,
+                )
+            )
 
         self._run_started = None
         self._run_task = None
@@ -1480,6 +1509,20 @@ class ScheduleRunner:
                 "type": event_type.value,
                 **data,
             },
+        )
+
+    @callback
+    def _send_notification(self, message: str) -> None:
+        """Send to the schedule's notify targets without holding up the run."""
+        self.hass.async_create_task(
+            notifications.async_send_run_notification(
+                self.hass,
+                self.config,
+                self.entry.entry_id,
+                title=self.entry.title,
+                message=message,
+            ),
+            name=f"{DOMAIN} notify {self.entry.entry_id}",
         )
 
     @callback
