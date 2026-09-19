@@ -2,10 +2,16 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
-## [Unreleased]
+## [0.3.0] — 2026-09-19
+
+Adds run notifications.
 
 ### Added
 - Run notifications, per schedule: a new **Notifications** step picks which events to notify about (watering starts, finishes, is stopped early, has an error, or is skipped for any reason) and who gets them: `notify.*` services, `persistent_notification.create` and `notify.*` entities.
+
+### Fixed
+- The AI report's notification list no longer offers `notify.send_message`, which needs a notify entity target and failed when picked.
+- Diagnostics now redact the notification services and entities, as they already did for the AI report's notification service.
 
 ## [0.2.0] — 2026-09-15
 
