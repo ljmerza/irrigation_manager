@@ -2,9 +2,10 @@
 
 One config entry per schedule. Both flows walk the same steps — zones, run
 time, frequency, start time, conditions, AI reports, run notifications — through
-ScheduleFlowMixin. The config flow starts with a menu: create manually, import
-the legacy helpers, import a B-Hyve program, or describe the schedule to an AI
-task. Imports and descriptions only fill in defaults; every value still goes
+ScheduleFlowMixin. The config flow starts with a menu: create manually, copy an
+existing schedule, import the legacy helpers, import a B-Hyve program, or
+describe the schedule to an AI task. Copies, imports and descriptions only fill
+in defaults; every value still goes
 through the normal steps, and nothing is saved until the flow finishes.
 
 Only the keys for the chosen frequency, start mode and conditions are stored.
@@ -186,7 +187,8 @@ NOTIFY_SEND_MESSAGE = "send_message"
 LLMVISION_DOMAIN = "llmvision"
 PERSISTENT_NOTIFICATION_SERVICE = "persistent_notification.create"
 
-# Fields that exist only in the import and describe steps.
+# Fields that exist only in the copy, import and describe steps.
+FIELD_SCHEDULE = "schedule"
 FIELD_PROGRAM = "program"
 FIELD_DESCRIPTION = "description"
 FIELD_DISABLE_PROGRAM = "disable_program"
@@ -1220,7 +1222,10 @@ class IrrigationManagerConfigFlow(ScheduleFlowMixin, ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        options = ["create", "import_legacy", "import_bhyve"]
+        options = ["create"]
+        if self.hass.config_entries.async_entries(DOMAIN):
+            options.append("copy")
+        options += ["import_legacy", "import_bhyve"]
         if self.hass.states.async_entity_ids(AI_TASK_DOMAIN):
             options.append("describe")
         return self.async_show_menu(step_id="user", menu_options=options)
@@ -1248,6 +1253,53 @@ class IrrigationManagerConfigFlow(ScheduleFlowMixin, ConfigFlow, domain=DOMAIN):
             errors=errors,
             description_placeholders={"notes": notes},
         )
+
+    # --- copy ---------------------------------------------------------------
+
+    async def async_step_copy(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        entries = sorted(
+            self.hass.config_entries.async_entries(DOMAIN),
+            key=lambda entry: entry.title.casefold(),
+        )
+        if not entries:
+            return self.async_abort(reason="no_schedules")
+
+        # The schedule may have been deleted since the form was shown.
+        source = next(
+            (
+                entry
+                for entry in entries
+                if user_input is not None and entry.entry_id == user_input[FIELD_SCHEDULE]
+            ),
+            None,
+        )
+        if source is not None:
+            self._config.update(deepcopy(merged_config(source)))
+            self._config[CONF_NAME] = self._copy_name(source.title)
+            return await self.async_step_name()
+
+        options = [
+            SelectOptionDict(value=entry.entry_id, label=entry.title) for entry in entries
+        ]
+        schema = vol.Schema(
+            {
+                vol.Required(FIELD_SCHEDULE, default=entries[0].entry_id): SelectSelector(
+                    SelectSelectorConfig(options=options, mode=SelectSelectorMode.LIST)
+                )
+            }
+        )
+        return self.async_show_form(step_id="copy", data_schema=schema)
+
+    def _copy_name(self, title: str) -> str:
+        """`title (copy)`, numbered when that name is taken."""
+        name = f"{title} (copy)"
+        number = 2
+        while _name_errors(self.hass, name, exclude_entry_id=None):
+            name = f"{title} (copy {number})"
+            number += 1
+        return name
 
     # --- imports ------------------------------------------------------------
 

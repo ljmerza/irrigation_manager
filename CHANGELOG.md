@@ -2,6 +2,16 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.4.0] — 2026-09-24
+
+Adds copying a schedule.
+
+### Added
+- Copy a schedule: **Copy an existing schedule** in the setup menu pre-fills every step from the chosen schedule, zones included, with the name defaulting to `<name> (copy)`. Schedule cards in the panel have a **Copy** button that opens the setup menu.
+
+### Changed
+- The schedule's device is looked up with `async_get_device_by_identifier` on Home Assistant 2026.9 and later, where `async_get_device` is deprecated; older versions keep the old lookup.
+
 ## [0.3.0] — 2026-09-19
 
 Adds run notifications.

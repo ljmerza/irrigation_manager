@@ -1414,6 +1414,99 @@ async def test_describe_error_shown_on_form(hass: HomeAssistant) -> None:
     assert schema_default(result, "description") == "water"
 
 
+# --- config flow: copy a schedule ---------------------------------------------
+
+
+async def test_user_menu_offers_copy_with_a_schedule(hass: HomeAssistant) -> None:
+    await setup_entry(hass, title="Front lawn", data=V02_CONFIG)
+    result = await start_flow(hass)
+    assert result["menu_options"] == ["create", "copy", "import_legacy", "import_bhyve"]
+
+
+async def test_copy_prefills_every_step(hass: HomeAssistant) -> None:
+    result = await start_create(hass)
+    result = await configure(hass, result, {"name": "Front lawn"})
+    result = await walk_to_conditions(
+        hass, result, configure, menu, zones=("valve.deck_zone", "switch.front_yard")
+    )
+    result = await configure(hass, result, {"skip_conditions": ["rain", "moisture"]})
+    result = await configure(hass, result, CONDITION_INPUT["rain"])
+    result = await configure(hass, result, CONDITION_INPUT["moisture"])
+    result = await skip_notifications(hass, result)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    source = hass.config_entries.async_entries(DOMAIN)[0]
+
+    result = await menu(hass, await start_flow(hass), "copy")
+    assert result["step_id"] == "copy"
+    assert schema_selector(result, "schedule").config["options"] == [
+        {"value": source.entry_id, "label": "Front lawn"}
+    ]
+    result = await configure(hass, result, {"schedule": source.entry_id})
+    assert result["step_id"] == "name"
+    assert schema_default(result, "name") == "Front lawn (copy)"
+    result = await configure(hass, result, {})
+    assert schema_default(result, "zones") == ["valve.deck_zone", "switch.front_yard"]
+    result = await configure(hass, result, {})
+    result = await configure(hass, result, {})
+    result = await menu(hass, result, "interval")
+    result = await configure(hass, result, {})
+    result = await menu(hass, result, "start_time")
+    result = await configure(hass, result, {})
+    assert schema_default(result, "skip_conditions") == ["rain", "moisture"]
+    result = await configure(hass, result, {})
+    result = await configure(hass, result, {})
+    result = await configure(hass, result, {})
+    result = await skip_notifications(hass, result)
+
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert result["title"] == "Front lawn (copy)"
+    assert result["data"] == {**source.data, "name": "Front lawn (copy)"}
+    assert_config_valid(hass, result["data"])
+
+
+async def test_copy_reads_options_and_numbers_taken_names(hass: HomeAssistant) -> None:
+    await setup_entry(hass, title="Front lawn (copy)", data=FULL_CONFIG)
+    edited = {**FULL_CONFIG, "zones": [{"entity_id": "valve.deck_zone", "minutes": 25}]}
+    source = await setup_entry(
+        hass, title="Front lawn", data=FULL_CONFIG, options=edited
+    )
+
+    result = await menu(hass, await start_flow(hass), "copy")
+    # Listed by name, the first one picked by default.
+    assert [option["label"] for option in schema_selector(result, "schedule").config["options"]] == [
+        "Front lawn",
+        "Front lawn (copy)",
+    ]
+    assert schema_default(result, "schedule") == source.entry_id
+    result = await configure(hass, result, {})
+    assert schema_default(result, "name") == "Front lawn (copy 2)"
+    result = await configure(hass, result, {})
+    assert schema_default(result, "zones") == ["valve.deck_zone"]
+    result = await configure(hass, result, {})
+    assert schema_default(result, "valve.deck_zone") == 25
+
+
+async def test_copy_deleted_schedule_shows_the_form_again(hass: HomeAssistant) -> None:
+    MockConfigEntry(domain=DOMAIN, title="Back yard", data=FULL_CONFIG).add_to_hass(hass)
+    source = MockConfigEntry(domain=DOMAIN, title="Front lawn", data=FULL_CONFIG)
+    source.add_to_hass(hass)
+    result = await menu(hass, await start_flow(hass), "copy")
+    await hass.config_entries.async_remove(source.entry_id)
+    result = await configure(hass, result, {"schedule": source.entry_id})
+    assert result["step_id"] == "copy"
+    assert [option["label"] for option in schema_selector(result, "schedule").config["options"]] == [
+        "Back yard"
+    ]
+
+
+async def test_copy_without_schedules_aborts(hass: HomeAssistant) -> None:
+    flow = config_flow.IrrigationManagerConfigFlow()
+    flow.hass = hass
+    result = await flow.async_step_copy()
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_schedules"
+
+
 # --- options flow -------------------------------------------------------------
 
 
@@ -1778,7 +1871,7 @@ def test_every_error_and_abort_has_strings() -> None:
     assert errors - config_only - STRINGS["options"]["error"].keys() == set()
 
     aborts = set(re.findall(r'async_abort\(\s*reason="([a-z_]+)"', source))
-    assert aborts == {"no_legacy_helpers", "no_bhyve_programs"}
+    assert aborts == {"no_schedules", "no_legacy_helpers", "no_bhyve_programs"}
     assert aborts - STRINGS["config"]["abort"].keys() == set()
 
 
@@ -1900,6 +1993,8 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
             seen.append(("config", await menu(hass, await start_flow(hass), "import_bhyve")))
 
     entry = await setup_entry(hass, title="Front lawn", data=V02_CONFIG)
+    result = await m(await start_flow(hass), "copy")
+    await c(result, {"schedule": entry.entry_id})
     result = await hass.config_entries.options.async_init(entry.entry_id)
     seen.append(("options", result))
     seen.append(("options", await options_configure(hass, result, {"name": "Garden"})))
@@ -1912,6 +2007,7 @@ async def test_strings_cover_every_shown_step(hass: HomeAssistant) -> None:
             "start", "start_time", "start_sunset", "start_sunrise", "conditions", "rain",
             "forecast", "moisture", "temperature", "wind", "occupancy", "ai",
             "notifications", "import_legacy", "import_bhyve", "describe", "bhyve_disable", "hourly",
+            "copy",
         )
     } <= shown
     assert ("config", "no_bhyve_programs") not in shown  # aborts carry reason, not step_id

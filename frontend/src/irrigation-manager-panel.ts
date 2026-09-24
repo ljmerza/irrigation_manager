@@ -408,6 +408,13 @@ export class IrrigationManagerPanel extends LitElement {
               `
             : nothing}
           <span class="spacer"></span>
+          <button
+            class="action"
+            title="Opens Add schedule; pick Copy an existing schedule"
+            @click=${this._addSchedule}
+          >
+            ${svgIcon(icons.copy)}Copy
+          </button>
           <button class="action" @click=${() => this._editSchedule(schedule)}>
             ${svgIcon(icons.pencil)}Edit
           </button>

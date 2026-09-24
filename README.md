@@ -14,7 +14,7 @@ One config entry = one schedule. Add as many schedules as you want.
 - **Schedules** ([setup](#adding-a-schedule)): one or more `valve` / `switch` zones with 1–180 minutes each, run one after another or all at once.
   - Frequency: every N days, chosen days of the week, or every N hours between a first and last run time.
   - Start at a fixed time, or finish a set time before or after sunrise or sunset.
-- **Setup options**: create manually, import the legacy watering helpers or a B-Hyve program, or describe the schedule in words to an AI task.
+- **Setup options**: create manually, copy an existing schedule, import the legacy watering helpers or a B-Hyve program, or describe the schedule in words to an AI task.
 - **Skip conditions** ([conditions](#conditions)):
   - Rain: several sensors combined by max, median or quorum, over the last N hours or since the last watering.
   - Rain forecast: chance and/or amount, with agreement across several weather entities.
@@ -71,6 +71,7 @@ Docker bind mount example:
 | Option | What it does |
 |---|---|
 | **Create manually** | Goes through the setup steps below. |
+| **Copy an existing schedule** | Shown when a schedule exists. Pick one and every step is pre-filled from it, zones included; the name defaults to `<name> (copy)`. Change anything before saving. |
 | **Import legacy helpers** | Reads the old watering helpers (`input_text.drip_irrigation_schedule` such as `06:00 2d 30m`, `input_number.rain_threshold`, `input_datetime.drip_irrigation_last_run` and related helpers) and pre-fills the steps. You still choose the zones. See [docs/migration.md](docs/migration.md). |
 | **Import B-Hyve program** | Lists the programs on B-Hyve devices (`sensor.*_program_a`–`_d`) and pre-fills a schedule from one. Odd/even-day and one-time programs can't be imported. The last step has a **Turn off this program on the device** checkbox, off by default; the device's program switch is only turned off when you tick it. |
 | **Describe in words** | Shown when an `ai_task` entity exists. The AI task turns your description into settings that pre-fill the steps. Nothing is saved until you finish the steps; values the setup wouldn't accept are dropped and listed. |
@@ -272,7 +273,7 @@ An admin-only **Irrigation** entry in the sidebar lists every schedule:
 - history: the last 10 runs and skips, **Show more** for up to 100
 - **Weekly report** and **Explain skips** when an AI task entity is configured; the text opens in a dialog
 
-**Add schedule** and **Edit** open Home Assistant's own setup and options flows.
+**Add schedule** and **Edit** open Home Assistant's own setup and options flows. **Copy** on a schedule card opens the same setup menu; pick **Copy an existing schedule** there.
 
 <img src="assets/panel.png" alt="A schedule card in the Irrigation panel, showing next run, rain delay presets, the schedule and zone summaries, conditions, last run, last status and history" width="360">
 

@@ -3,9 +3,10 @@
     "step": {
       "user": {
         "title": "New irrigation schedule",
-        "description": "Choose how to start. Imports and descriptions only fill in the setup steps; you review every step before anything is saved.",
+        "description": "Choose how to start. Copies, imports and descriptions only fill in the setup steps; you review every step before anything is saved.",
         "menu_options": {
           "create": "Set up manually",
+          "copy": "Copy an existing schedule",
           "import_legacy": "Import the legacy irrigation helpers",
           "import_bhyve": "Copy a B-Hyve device program",
           "describe": "Describe the schedule in words (AI)"
@@ -21,6 +22,13 @@
       "import_legacy": {
         "title": "Import legacy helpers",
         "description": "These helpers were found:\n{found}\n\nNotes:\n{notes}\n\nSubmit to fill in the setup steps with these values. Nothing is saved until you finish the setup."
+      },
+      "copy": {
+        "title": "Copy a schedule",
+        "description": "Pick the schedule to copy. Every setting is filled in from it, including its zones, and you can change anything before saving.",
+        "data": {
+          "schedule": "Schedule"
+        }
       },
       "import_bhyve": {
         "title": "Copy a B-Hyve program",
@@ -304,6 +312,7 @@
       "notify_target_required": "Pick at least one notify service or entity, or clear the events."
     },
     "abort": {
+      "no_schedules": "There are no schedules to copy.",
       "no_legacy_helpers": "No legacy irrigation helpers were found.",
       "no_bhyve_programs": "No B-Hyve program can be copied.\n\n{programs}"
     }
