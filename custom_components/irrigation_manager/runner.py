@@ -159,6 +159,21 @@ def zone_durations(config: Mapping[str, Any]) -> list[tuple[str, timedelta]]:
     ]
 
 
+@callback
+def get_schedule_device(
+    registry: dr.DeviceRegistry, entry_id: str
+) -> dr.DeviceEntry | None:
+    """The schedule's device, by its (DOMAIN, entry_id) identifier.
+
+    async_get_device_by_identifier arrived in HA 2026.9, where async_get_device
+    is deprecated and stops working in 2027.8.0. Drop the fallback once the
+    minimum Home Assistant version in hacs.json reaches 2026.9.
+    """
+    if (by_identifier := getattr(registry, "async_get_device_by_identifier", None)) is not None:
+        return by_identifier((DOMAIN, entry_id), entry_id)
+    return registry.async_get_device(identifiers={(DOMAIN, entry_id)})
+
+
 @dataclass(slots=True)
 class _ActiveZone:
     driver: ZoneDriver
@@ -1497,9 +1512,7 @@ class ScheduleRunner:
 
     @callback
     def _fire(self, event_type: EventType, **data: Any) -> None:
-        device = dr.async_get(self.hass).async_get_device(
-            identifiers={(DOMAIN, self.entry.entry_id)}
-        )
+        device = get_schedule_device(dr.async_get(self.hass), self.entry.entry_id)
         self.hass.bus.async_fire(
             EVENT_IRRIGATION,
             {

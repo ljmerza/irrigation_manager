@@ -25,7 +25,7 @@ from homeassistant.helpers.typing import ConfigType
 
 from . import panel, websocket_api
 from .const import DOMAIN, SIGNAL_SCHEDULES_CHANGED, merged_config, zone_entity_ids
-from .runner import ScheduleRunner
+from .runner import ScheduleRunner, get_schedule_device
 from .services import async_setup_services
 
 PLATFORMS: list[Platform] = [
@@ -118,7 +118,7 @@ async def _async_update_listener(
         await runner.async_update_config(config)
 
     device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device(identifiers={(DOMAIN, entry.entry_id)})
+    device = get_schedule_device(device_registry, entry.entry_id)
     if device is not None and device.name != entry.title:
         device_registry.async_update_device(device.id, name=entry.title)
     async_dispatcher_send(hass, SIGNAL_SCHEDULES_CHANGED)
