@@ -2,6 +2,13 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.4.2] — 2026-09-27
+
+Tidies the panel's schedule cards.
+
+### Changed
+- Each schedule card's details (next run, rain delay, schedule, zones, conditions, last run, last status, history) are behind a **Details** toggle, closed by default. The running progress and the controls stay visible.
+
 ## [0.4.1] — 2026-09-27
 
 Shows the current frequency and start choice when editing a schedule.
