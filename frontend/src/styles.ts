@@ -271,6 +271,35 @@ export const panelStyles = css`
     white-space: nowrap;
   }
 
+  .details summary {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    margin: 0 16px 8px;
+    color: var(--secondary-text-color, #727272);
+    font-size: 14px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .details summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .details summary .icon {
+    transition: transform 0.2s;
+  }
+
+  .details[open] summary .icon {
+    transform: rotate(180deg);
+  }
+
+  .details summary:focus-visible {
+    outline: 2px solid var(--primary-color, #03a9f4);
+    outline-offset: 2px;
+  }
+
   .rows {
     display: grid;
     grid-template-columns: max-content minmax(0, 1fr);

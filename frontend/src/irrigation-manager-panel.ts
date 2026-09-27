@@ -306,50 +306,53 @@ export class IrrigationManagerPanel extends LitElement {
 
         ${schedule.running ? this._renderRunning(hass, schedule) : nothing}
 
-        <dl class="rows">
-          <dt>Next run</dt>
-          <dd>${this._renderNextRun(hass, schedule)}</dd>
+        <details class="details">
+          <summary>${svgIcon(icons.chevron)}Details</summary>
+          <dl class="rows">
+            <dt>Next run</dt>
+            <dd>${this._renderNextRun(hass, schedule)}</dd>
 
-          <dt>Rain delay</dt>
-          <dd>${this._renderRainDelay(hass, schedule, pending)}</dd>
+            <dt>Rain delay</dt>
+            <dd>${this._renderRainDelay(hass, schedule, pending)}</dd>
 
-          <dt>Schedule</dt>
-          <dd>
-            <div>${frequencySummary(hass, config)}</div>
-            <div class="muted">${startSummary(hass, config)}</div>
-          </dd>
+            <dt>Schedule</dt>
+            <dd>
+              <div>${frequencySummary(hass, config)}</div>
+              <div class="muted">${startSummary(hass, config)}</div>
+            </dd>
 
-          <dt>Zones</dt>
-          <dd>${this._renderZones(hass, schedule, pending)}</dd>
+            <dt>Zones</dt>
+            <dd>${this._renderZones(hass, schedule, pending)}</dd>
 
-          <dt>Conditions</dt>
-          <dd>
-            ${conditions.length
-              ? conditions.map((line) => html`<div>${line}</div>`)
-              : html`<span class="muted">None</span>`}
-          </dd>
+            <dt>Conditions</dt>
+            <dd>
+              ${conditions.length
+                ? conditions.map((line) => html`<div>${line}</div>`)
+                : html`<span class="muted">None</span>`}
+            </dd>
 
-          <dt>Last run</dt>
-          <dd>${this._renderLastRun(hass, schedule)}</dd>
+            <dt>Last run</dt>
+            <dd>${this._renderLastRun(hass, schedule)}</dd>
 
-          ${schedule.last_status_at
-            ? html`
-                <dt>Last status</dt>
-                <dd>
-                  <div>
-                    ${statusLabel(schedule.status)}
-                    <span class="muted">· ${formatDateTime(hass, schedule.last_status_at)}</span>
-                  </div>
-                  ${details.map(
-                    (line) => html`<div class="detail ${line.tone ?? ""}">${line.text}</div>`
-                  )}
-                </dd>
-              `
-            : nothing}
+            ${schedule.last_status_at
+              ? html`
+                  <dt>Last status</dt>
+                  <dd>
+                    <div>
+                      ${statusLabel(schedule.status)}
+                      <span class="muted">· ${formatDateTime(hass, schedule.last_status_at)}</span>
+                    </div>
+                    ${details.map(
+                      (line) => html`<div class="detail ${line.tone ?? ""}">${line.text}</div>`
+                    )}
+                  </dd>
+                `
+              : nothing}
 
-          <dt>History</dt>
-          <dd>${this._renderHistory(hass, schedule, pending)}</dd>
-        </dl>
+            <dt>History</dt>
+            <dd>${this._renderHistory(hass, schedule, pending)}</dd>
+          </dl>
+        </details>
 
         ${evaluation ? this._renderEvaluation(hass, schedule, evaluation) : nothing}
 
