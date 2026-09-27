@@ -475,14 +475,23 @@ class ScheduleFlowMixin:
     async def async_step_frequency(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="frequency",
-            menu_options=[
-                Frequency.INTERVAL.value,
-                Frequency.WEEKDAYS.value,
-                Frequency.HOURLY.value,
-            ],
+        # A form rather than a menu so an edit shows the current choice selected.
+        if user_input is not None:
+            return await {
+                Frequency.INTERVAL: self.async_step_interval,
+                Frequency.WEEKDAYS: self.async_step_weekdays,
+                Frequency.HOURLY: self.async_step_hourly,
+            }[Frequency(user_input[CONF_FREQUENCY])]()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_FREQUENCY,
+                    default=str(self._default(CONF_FREQUENCY, Frequency.INTERVAL)),
+                ): _select_selector([item.value for item in Frequency], CONF_FREQUENCY)
+            }
         )
+        return self.async_show_form(step_id="frequency", data_schema=schema)
 
     async def async_step_interval(
         self, user_input: dict[str, Any] | None = None
@@ -582,10 +591,22 @@ class ScheduleFlowMixin:
     async def async_step_start(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        return self.async_show_menu(
-            step_id="start",
-            menu_options=["start_time", "start_sunrise", "start_sunset"],
+        if user_input is not None:
+            return await {
+                StartMode.TIME: self.async_step_start_time,
+                StartMode.SUNRISE: self.async_step_start_sunrise,
+                StartMode.SUNSET: self.async_step_start_sunset,
+            }[StartMode(user_input[CONF_START_MODE])]()
+
+        schema = vol.Schema(
+            {
+                vol.Required(
+                    CONF_START_MODE,
+                    default=str(self._default(CONF_START_MODE, StartMode.TIME)),
+                ): _select_selector([item.value for item in StartMode], CONF_START_MODE)
+            }
         )
+        return self.async_show_form(step_id="start", data_schema=schema)
 
     async def async_step_start_time(
         self, user_input: dict[str, Any] | None = None

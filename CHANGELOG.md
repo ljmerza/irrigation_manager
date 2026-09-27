@@ -2,6 +2,13 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.4.1] — 2026-09-27
+
+Shows the current frequency and start choice when editing a schedule.
+
+### Changed
+- The **Frequency** and **Start time** steps are radio lists instead of menus, with the schedule's current choice selected. Editing a schedule no longer means remembering which option it used; press Submit to keep it.
+
 ## [0.4.0] — 2026-09-24
 
 Adds copying a schedule.
