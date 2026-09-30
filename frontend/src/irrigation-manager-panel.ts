@@ -57,8 +57,15 @@ interface DialogContent {
 }
 
 const errorMessage = (err: unknown): string => {
-  if (err && typeof err === "object" && "message" in err) {
-    return String((err as { message: unknown }).message);
+  if (err && typeof err === "object") {
+    if ("message" in err) {
+      return String((err as { message: unknown }).message);
+    }
+    // A dropped websocket rejects pending calls with the whole result frame,
+    // {type, success: false, error: {code, message}}, so the text is one level down.
+    if ("error" in err) {
+      return errorMessage((err as { error: unknown }).error);
+    }
   }
   return String(err);
 };
