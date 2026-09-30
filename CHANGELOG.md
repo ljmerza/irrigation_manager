@@ -2,6 +2,13 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.4.3] — 2026-09-30
+
+Fixes an unreadable error on the panel.
+
+### Fixed
+- A schedule card showed **[object Object]** when the connection to Home Assistant dropped while an action (such as running a zone) was still waiting. It now shows the real message, "Connection lost".
+
 ## [0.4.2] — 2026-09-27
 
 Tidies the panel's schedule cards.
