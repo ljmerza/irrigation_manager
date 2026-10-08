@@ -2,6 +2,13 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.5.0] — 2026-10-08
+
+Links each zone to its device.
+
+### Added
+- Zone names in a schedule card's **Details → Zones** list are clickable. A click opens the zone's device page, or the entity's more-info dialog when it has no device.
+
 ## [0.4.3] — 2026-09-30
 
 Fixes an unreadable error on the panel.
