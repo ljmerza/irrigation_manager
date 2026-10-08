@@ -352,6 +352,19 @@ export const panelStyles = css`
     gap: 12px;
   }
 
+  .zone-link {
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--primary-color, #03a9f4);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .zone-link:hover {
+    text-decoration: underline;
+  }
+
   .zone-list .zone-error {
     display: block;
     font-size: 13px;

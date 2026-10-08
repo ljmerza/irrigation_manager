@@ -24,6 +24,8 @@ export interface HassLocale {
 export interface HomeAssistant {
   connection: HassConnection;
   states: Record<string, HassEntity>;
+  // Entity registry entries; device_id is null for entities without a device.
+  entities?: Record<string, { device_id?: string | null }>;
   callWS<T>(message: Record<string, unknown>): Promise<T>;
   language: string;
   locale?: HassLocale;

@@ -500,7 +500,13 @@ export class IrrigationManagerPanel extends LitElement {
       <ul class="zone-list">
         ${zones.map(
           (zone) => html`<li>
-            <span>${entityName(hass, zone.entity_id)}</span>
+            <button
+              class="zone-link"
+              title="Open this zone's device"
+              @click=${() => this._openZone(hass, zone.entity_id)}
+            >
+              ${entityName(hass, zone.entity_id)}
+            </button>
             <span class="zone-controls">
               <span class="muted">${zone.minutes} min</span>
               <button
@@ -896,6 +902,18 @@ export class IrrigationManagerPanel extends LitElement {
 
   private _editSchedule(schedule: Schedule): void {
     navigate(`/config/integrations/integration/${DOMAIN}#config_entry=${schedule.entry_id}`);
+  }
+
+  // Zones without a device (template switches, helpers) get the more-info dialog instead.
+  private _openZone(hass: HomeAssistant, entityId: string): void {
+    const deviceId = hass.entities?.[entityId]?.device_id;
+    if (deviceId) {
+      navigate(`/config/devices/device/${deviceId}`);
+      return;
+    }
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true })
+    );
   }
 }
 
