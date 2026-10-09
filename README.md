@@ -276,6 +276,7 @@ An admin-only **Irrigation** entry in the sidebar lists every schedule:
 **Add schedule** and **Edit** open Home Assistant's own setup and options flows. **Copy** on a schedule card opens the same setup menu; pick **Copy an existing schedule** there.
 
 <img src="assets/panel.png" alt="A schedule card in the Irrigation panel, showing next run, rain delay presets, the schedule and zone summaries, conditions, last run, last status and history" width="360">
+<img src="assets/panel-list.jpg" alt="The Irrigation panel on a phone, listing schedule cards with their status badges (Disabled, Skipped: rain), on/off switches and Run now, Skip next, Check now, Copy and Edit buttons" width="360">
 
 ## Migration
 
