@@ -56,6 +56,13 @@ interface DialogContent {
   text: string;
 }
 
+/** The "Run now" dialog: one minutes field per zone, kept as text while editing. */
+interface RunDialog {
+  entryId: string;
+  minutes: Record<string, string>;
+  error?: string;
+}
+
 const errorMessage = (err: unknown): string => {
   if (err && typeof err === "object") {
     if ("message" in err) {
@@ -110,6 +117,8 @@ export class IrrigationManagerPanel extends LitElement {
   @state() private _globalError?: string;
 
   @state() private _dialog?: DialogContent;
+
+  @state() private _runDialog?: RunDialog;
 
   @state() private _now = Date.now();
 
@@ -184,7 +193,7 @@ export class IrrigationManagerPanel extends LitElement {
         ${this._renderGlobal()}
         ${this._renderBody(hass)}
       </main>
-      ${this._renderDialog()}
+      ${this._renderDialog()} ${this._renderRunDialog()}
     `;
   }
 
@@ -379,7 +388,7 @@ export class IrrigationManagerPanel extends LitElement {
             : html`<button
                 class="action filled"
                 ?disabled=${pending}
-                @click=${() => this._action(schedule, "run_now")}
+                @click=${() => this._openRunDialog(schedule)}
               >
                 ${svgIcon(icons.play)}Run now
               </button>`}
@@ -661,6 +670,67 @@ export class IrrigationManagerPanel extends LitElement {
     `;
   }
 
+  private _renderRunDialog(): TemplateResult | typeof nothing {
+    const dialog = this._runDialog;
+    const hass = this.hass;
+    const schedule = this._schedules?.find((item) => item.entry_id === dialog?.entryId);
+    if (!dialog || !hass || !schedule) {
+      return nothing;
+    }
+    const zones = schedule.config?.zones ?? [];
+    const pending = this._pending[schedule.entry_id] !== undefined;
+    const title = `Run ${schedule.name} now`;
+    return html`
+      <div class="dialog-backdrop" @click=${this._closeRunDialog}>
+        <div
+          class="dialog"
+          role="dialog"
+          aria-modal="true"
+          aria-label=${title}
+          @click=${(ev: Event) => ev.stopPropagation()}
+        >
+          <h2>${title}</h2>
+          <div class="dialog-text">
+            Minutes to water each zone. Start with the schedule's own times to run it as configured.
+          </div>
+          <ul class="run-zones">
+            ${zones.map(
+              (zone) => html`<li>
+                <label for=${`run-${zone.entity_id}`}>${entityName(hass, zone.entity_id)}</label>
+                <input
+                  id=${`run-${zone.entity_id}`}
+                  type="number"
+                  inputmode="numeric"
+                  min="1"
+                  max=${MAX_ZONE_MINUTES}
+                  step="1"
+                  .value=${dialog.minutes[zone.entity_id] ?? ""}
+                  @input=${(ev: Event) =>
+                    this._setRunMinutes(zone.entity_id, (ev.target as HTMLInputElement).value)}
+                  @keydown=${(ev: KeyboardEvent) => {
+                    if (ev.key === "Enter") {
+                      this._startRun(schedule);
+                    }
+                  }}
+                />
+                <span class="muted">min</span>
+              </li>`
+            )}
+          </ul>
+          ${dialog.error
+            ? html`<div class="banner error dialog-error" role="alert">${dialog.error}</div>`
+            : nothing}
+          <div class="dialog-actions">
+            <button class="action" @click=${this._closeRunDialog}>Cancel</button>
+            <button class="action filled" ?disabled=${pending} @click=${() => this._startRun(schedule)}>
+              ${svgIcon(icons.play)}Start
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   // --- data -------------------------------------------------------------------
 
   private _subscribe(): void {
@@ -886,11 +956,71 @@ export class IrrigationManagerPanel extends LitElement {
     this._dialog = undefined;
   };
 
+  private _closeRunDialog = (): void => {
+    this._runDialog = undefined;
+  };
+
   private _handleKeydown = (ev: KeyboardEvent): void => {
-    if (ev.key === "Escape" && this._dialog) {
+    if (ev.key === "Escape" && (this._dialog || this._runDialog)) {
       this._dialog = undefined;
+      this._runDialog = undefined;
     }
   };
+
+  /** Ask how long to water each zone, defaulting to the schedule's own times. */
+  private _openRunDialog(schedule: Schedule): void {
+    const zones = schedule.config?.zones ?? [];
+    if (!zones.length) {
+      // Nothing to choose; the backend reports "has no zones" on the card.
+      void this._action(schedule, "run_now");
+      return;
+    }
+    this._actionErrors = without(this._actionErrors, schedule.entry_id);
+    this._runDialog = {
+      entryId: schedule.entry_id,
+      minutes: Object.fromEntries(zones.map((zone) => [zone.entity_id, String(zone.minutes)])),
+    };
+  }
+
+  private _setRunMinutes(entityId: string, value: string): void {
+    if (!this._runDialog) {
+      return;
+    }
+    this._runDialog = {
+      ...this._runDialog,
+      minutes: { ...this._runDialog.minutes, [entityId]: value },
+      error: undefined,
+    };
+  }
+
+  private _startRun(schedule: Schedule): void {
+    const dialog = this._runDialog;
+    if (!dialog || this._pending[schedule.entry_id] !== undefined) {
+      return;
+    }
+    const changed: Record<string, number> = {};
+    for (const zone of schedule.config?.zones ?? []) {
+      const text = (dialog.minutes[zone.entity_id] ?? "").trim();
+      const minutes = Number(text);
+      if (!text || !Number.isInteger(minutes) || minutes < 1 || minutes > MAX_ZONE_MINUTES) {
+        this._runDialog = {
+          ...dialog,
+          error: `Enter whole minutes from 1 to ${MAX_ZONE_MINUTES} for every zone.`,
+        };
+        return;
+      }
+      if (minutes !== zone.minutes) {
+        changed[zone.entity_id] = minutes;
+      }
+    }
+    this._runDialog = undefined;
+    // Zones left at their configured time keep following the schedule.
+    void this._action(
+      schedule,
+      "run_now",
+      Object.keys(changed).length ? { zone_minutes: changed } : {}
+    );
+  }
 
   private _toggleMenu(): void {
     this.dispatchEvent(new CustomEvent("hass-toggle-menu", { bubbles: true, composed: true }));

@@ -198,6 +198,47 @@ async def test_run_now_minutes_validated(hass: HomeAssistant, hass_ws_client) ->
     assert msg["error"]["code"] == "invalid_format"
 
 
+async def test_run_now_passes_zone_minutes(hass: HomeAssistant, hass_ws_client) -> None:
+    entry = add_schedule(hass, "Front lawn")
+    client = await hass_ws_client(hass)
+
+    with patch.object(ScheduleRunner, "async_run_now", autospec=True) as mocked:
+        await client.send_json_auto_id(
+            {
+                "type": f"{DOMAIN}/run_now",
+                "entry_id": entry.entry_id,
+                "zone_minutes": {"valve.deck_zone": 7},
+            }
+        )
+        msg = await client.receive_json()
+
+    assert msg["success"], msg
+    mocked.assert_awaited_once_with(entry.runtime_data, zone_minutes={"valve.deck_zone": 7})
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"zone_minutes": {"valve.deck_zone": 0}},
+        {"zone_minutes": {"valve.deck_zone": 181}},
+        {"minutes": 5, "zone_minutes": {"valve.deck_zone": 5}},
+    ],
+)
+async def test_run_now_zone_minutes_validated(
+    hass: HomeAssistant, hass_ws_client, extra: dict[str, Any]
+) -> None:
+    entry = add_schedule(hass, "Front lawn")
+    client = await hass_ws_client(hass)
+
+    await client.send_json_auto_id(
+        {"type": f"{DOMAIN}/run_now", "entry_id": entry.entry_id, **extra}
+    )
+    msg = await client.receive_json()
+
+    assert not msg["success"]
+    assert msg["error"]["code"] == "invalid_format"
+
+
 @pytest.mark.parametrize("case", ["unknown", "not_loaded", "other_domain"])
 async def test_action_on_missing_schedule_is_not_found(
     hass: HomeAssistant, hass_ws_client, case: str

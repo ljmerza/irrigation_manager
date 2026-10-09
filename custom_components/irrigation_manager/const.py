@@ -280,6 +280,7 @@ SERVICE_EXPLAIN_SKIPS: Final = "explain_skips"
 
 ATTR_HOURS: Final = "hours"
 ATTR_ZONE: Final = "zone"  # zone entity_id for run_zone
+ATTR_ZONE_MINUTES: Final = "zone_minutes"  # optional {zone entity_id: minutes} for run_now (panel)
 ATTR_ENABLED: Final = "enabled"
 ATTR_LIMIT: Final = "limit"
 ATTR_DAYS: Final = "days"

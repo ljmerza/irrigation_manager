@@ -28,6 +28,7 @@ from .const import (
     ATTR_MINUTES,
     ATTR_SKIP,
     ATTR_ZONE,
+    ATTR_ZONE_MINUTES,
     CONF_AI_TASK_ENTITY,
     CONF_ZONE_ENTITY,
     CONF_ZONE_MINUTES,
@@ -233,14 +234,23 @@ def ws_subscribe(
     {
         vol.Required("type"): f"{DOMAIN}/run_now",
         vol.Required(ATTR_ENTRY_ID): str,
-        vol.Optional(ATTR_MINUTES): _MINUTES,
+        vol.Exclusive(ATTR_MINUTES, "override"): _MINUTES,
+        vol.Exclusive(ATTR_ZONE_MINUTES, "override"): {str: _MINUTES},
     }
 )
 @websocket_api.async_response
 async def ws_run_now(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """Start a run now; `minutes` overrides every zone."""
+    """Start a run now; `minutes` overrides every zone, `zone_minutes` individual zones."""
+    if ATTR_ZONE_MINUTES in msg:
+        await _async_action(
+            hass,
+            connection,
+            msg,
+            lambda runner: runner.async_run_now(zone_minutes=msg[ATTR_ZONE_MINUTES]),
+        )
+        return
     await _async_action(
         hass, connection, msg, lambda runner: runner.async_run_now(msg.get(ATTR_MINUTES))
     )

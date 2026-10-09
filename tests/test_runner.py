@@ -527,6 +527,30 @@ async def test_run_now_ignores_skip_next_and_clamps_override(
         await runner.async_run_now()
 
 
+async def test_run_now_zone_minutes_override_only_the_named_zones(
+    hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
+) -> None:
+    runner = await make_runner()
+    await runner.async_run_now(zone_minutes={ZONE_B: 20})  # zone A keeps its 10 minutes
+    await settle(hass)
+    assert runner.current_zone == ZONE_A
+
+    await advance_to(hass, freezer, local(2026, 9, 14, 5, 10))
+    assert runner.current_zone == ZONE_B
+    assert runner.current_zone_ends_at == local(2026, 9, 14, 5, 30)
+
+
+async def test_run_now_zone_minutes_rejects_unknown_zone(
+    hass: HomeAssistant, calls, decide, make_runner
+) -> None:
+    runner = await make_runner()
+
+    with pytest.raises(HomeAssistantError, match="valve.nope is not a zone"):
+        await runner.async_run_now(zone_minutes={"valve.nope": 5})
+
+    assert not runner.running
+
+
 async def test_stop_mid_run_closes_zone_and_skips_the_rest(
     hass: HomeAssistant, freezer: FrozenDateTimeFactory, calls, decide, make_runner
 ) -> None:

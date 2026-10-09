@@ -1206,10 +1206,13 @@ class ScheduleRunner:
 
     # --- public API -----------------------------------------------------------
 
-    async def async_run_now(self, minutes: int | None = None) -> None:
+    async def async_run_now(
+        self, minutes: int | None = None, zone_minutes: Mapping[str, int] | None = None
+    ) -> None:
         """Start a run now, ignoring conditions and skip_next.
 
-        `minutes` overrides every zone's run time.
+        `minutes` overrides every zone's run time; `zone_minutes` overrides
+        individual zones by entity_id and leaves the others at their configured time.
         """
         if self.running:
             raise HomeAssistantError(f"{self.entry.title} is already running")
@@ -1221,6 +1224,25 @@ class ScheduleRunner:
                 minutes=max(MIN_ZONE_MINUTES, min(MAX_ZONE_MINUTES, int(minutes)))
             )
             zones = [(entity_id, override) for entity_id, _ in zones]
+        if zone_minutes:
+            unknown = set(zone_minutes) - set(zone_entity_ids(self.config))
+            if unknown:
+                raise HomeAssistantError(
+                    f"{', '.join(sorted(unknown))} is not a zone of {self.entry.title}"
+                )
+            zones = [
+                (
+                    entity_id,
+                    timedelta(
+                        minutes=max(
+                            MIN_ZONE_MINUTES, min(MAX_ZONE_MINUTES, int(zone_minutes[entity_id]))
+                        )
+                    )
+                    if entity_id in zone_minutes
+                    else duration,
+                )
+                for entity_id, duration in zones
+            ]
         self._start_run(zones, {"manual": True}, manual=True)
 
     async def async_run_zone(self, entity_id: str, minutes: int) -> None:

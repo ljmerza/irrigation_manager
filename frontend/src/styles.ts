@@ -613,7 +613,39 @@ export const panelStyles = css`
   .dialog-actions {
     display: flex;
     justify-content: flex-end;
+    gap: 8px;
     padding: 16px 24px 20px;
+  }
+
+  .run-zones {
+    display: grid;
+    gap: 8px;
+    margin: 0;
+    padding: 16px 24px 0;
+    overflow: auto;
+    list-style: none;
+  }
+
+  .run-zones li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 80px auto;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .run-zones input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--divider-color, #e0e0e0);
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+  }
+
+  .dialog-error {
+    margin: 12px 24px 0;
   }
 
   @media (max-width: 450px) {
