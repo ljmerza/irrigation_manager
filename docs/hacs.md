@@ -20,7 +20,7 @@ Items marked **verify before submitting** came from memory and could not be chec
 | Brand PNGs served by Home Assistant | `custom_components/irrigation_manager/brand/icon.png` (256×256), `icon@2x.png` (512×512) |
 | HACS metadata | `hacs.json` (`zip_release` + `filename: irrigation_manager.zip`) |
 | Validation workflow | `.github/workflows/validate.yaml` — hassfest + HACS action |
-| Test workflow | `.github/workflows/tests.yaml` — pytest and panel build via `ljmerza/misc-actions`, ruff (non-blocking) |
+| Test workflow | `.github/workflows/tests.yaml` — pytest and panel build via `ljmerza/misc-actions`, ruff |
 | Release workflow | `.github/workflows/release.yaml` — on a `v*` tag: tests, zip, GitHub release via `ljmerza/misc-actions` |
 | Stale issues | `.github/workflows/stale.yml` — `ljmerza/misc-actions` reusable workflow |
 | Test dependencies | `requirements_test.txt` (pytest-homeassistant-custom-component 0.13.205 → homeassistant 2025.1.4) |
@@ -49,7 +49,7 @@ CI/CD uses [`ljmerza/misc-actions`](https://github.com/ljmerza/misc-actions) at 
 - **validate.yaml** — `home-assistant/actions/hassfest@master` and `hacs/action@main` (`category: integration`), on push to `main`, PRs, daily and manual runs. misc-actions has no hassfest or HACS action.
 - **tests.yaml** — on push to `main`, PRs and manual runs.
   - `pytest`: `ljmerza/misc-actions/actions/python-test@v2` with Python 3.12, `requirements-file: requirements_test.txt` and `prerelease: allow` (homeassistant 2025.1.4 pins `aiohasupervisor==0.2.2b5`, which uv rejects otherwise).
-  - `lint`: `ruff check custom_components tests assets` with `continue-on-error: true` — the code currently has unsorted imports (23 `I001` findings with the configured Home Assistant import style). It stays a local job because misc-actions' `ruff-lint` needs a `uv.lock` and also runs `ruff format --check`. Run `ruff check --fix` once, review, then delete the `continue-on-error` line.
+  - `lint`: `ruff check custom_components tests assets`, blocking. It stays a local job because misc-actions' `ruff-lint` needs a `uv.lock` and also runs `ruff format --check`.
   - `frontend`: `ljmerza/misc-actions/actions/npm-build@v2` in `frontend/` (`npm ci` from the committed lockfile, `npm run build`, no pack), then `npx tsc --noEmit` and `git diff --exit-code` on `custom_components/irrigation_manager/www/irrigation-manager-panel.js`. Rebuild and commit the bundle whenever the panel source changes.
 - **release.yaml** — trigger: push a tag like `v0.2.0`. Jobs run in order:
   1. pytest, same as above;
@@ -69,13 +69,13 @@ The test jobs run Home Assistant 2025.1.4 (what the local suite uses), while the
 
 Done:
 
+1. **Lint blocking** — `ruff check --fix` sorted the imports and dropped 2 unused test imports; the `lint` job no longer has `continue-on-error`.
 2. **Checks green on GitHub** — Validate (hassfest, HACS) and Tests both pass on `main`.
 3. **Release cut** — `v0.2.0` tagged and pushed; the release workflow produced a full release with `irrigation_manager.zip` attached.
 6. **Submitted to the HACS default repositories** — [hacs/default#11022](https://github.com/hacs/default/pull/11022), one line added to the `integration` list. The PR must stay editable and must not be review-requested; HACS closes PRs that request reviews.
 
 Still open:
 
-1. **Make lint blocking**: `ruff check --fix custom_components tests assets`, review the import changes, run the tests, remove `continue-on-error: true` from the `lint` job. 23 `I001` import-order findings remain. This is a house rule, not a HACS requirement.
 4. **Test the HACS install** on a test Home Assistant: HACS → Custom repositories → add the repository as Integration → install → restart → add the integration. After #11022 merges the custom-repository step is no longer needed, and the README install section should drop it.
 5. **Brands** — **verified not required for the HACS checks**: the `brand/` folder in the integration satisfies the HACS action's brands validation, and the default-repository PR's brands check passed without an entry in `home-assistant/brands`. A PR to `home-assistant/brands` is still needed if you want the icon to show on Home Assistant older than 2026.3.
 

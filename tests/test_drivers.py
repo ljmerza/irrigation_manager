@@ -4,10 +4,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 import pytest
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+from pytest_homeassistant_custom_component.common import async_mock_service
 
 from custom_components.irrigation_manager.drivers import (
     ORBIT_BHYVE_MAX_SECONDS,
@@ -17,6 +14,9 @@ from custom_components.irrigation_manager.drivers import (
     ZoneDriver,
     async_get_driver,
 )
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import entity_registry as er
 
 
 @pytest.fixture(autouse=True)

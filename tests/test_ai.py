@@ -15,10 +15,8 @@ from types import SimpleNamespace
 from typing import Any
 from zoneinfo import ZoneInfo
 
-import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.core import HomeAssistant, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
+import pytest
 from pytest_homeassistant_custom_component.common import (
     async_fire_time_changed,
     async_mock_service,
@@ -33,6 +31,8 @@ from custom_components.irrigation_manager.const import (
     CONF_AI_REPORT_WEEKDAY,
     CONF_AI_TASK_ENTITY,
 )
+from homeassistant.core import HomeAssistant, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
 
 TZ = ZoneInfo("America/New_York")
 AI_ENTITY = "ai_task.claude_ai_task"

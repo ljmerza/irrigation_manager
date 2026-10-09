@@ -12,8 +12,6 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components import frontend
-from homeassistant.core import HomeAssistant
 
 from custom_components.irrigation_manager import panel
 from custom_components.irrigation_manager.const import (
@@ -23,7 +21,8 @@ from custom_components.irrigation_manager.const import (
     PANEL_TITLE,
     PANEL_WEBCOMPONENT,
 )
-
+from homeassistant.components import frontend
+from homeassistant.core import HomeAssistant
 
 VERSION = json.loads(Path(panel.__file__).with_name("manifest.json").read_text())["version"]
 

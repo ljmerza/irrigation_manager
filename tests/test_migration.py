@@ -10,9 +10,6 @@ from datetime import date, time
 from typing import Any
 
 import pytest
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr, entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
 from custom_components.irrigation_manager.migration import (
@@ -29,6 +26,9 @@ from custom_components.irrigation_manager.migration import (
     parse_legacy_schedule,
 )
 from custom_components.irrigation_manager.scheduler import Schedule
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 
 LIVE_LEGACY_STATES = {
     LEGACY_SCHEDULE: "06:00 2d 30m",

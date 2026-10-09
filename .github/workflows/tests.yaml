@@ -32,11 +32,8 @@ jobs:
   lint:
     name: Ruff
     runs-on: ubuntu-latest
-    # Not blocking yet: the code still has unsorted imports. Remove this line
-    # after running `ruff check --fix` once (see docs/hacs.md). Kept as a local
-    # job because misc-actions' ruff-lint needs a uv.lock and also runs
-    # `ruff format --check`.
-    continue-on-error: true
+    # Kept as a local job because misc-actions' ruff-lint needs a uv.lock and
+    # also runs `ruff format --check`.
     steps:
       - name: Checkout
         uses: actions/checkout@v4

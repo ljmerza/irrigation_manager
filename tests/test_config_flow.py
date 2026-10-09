@@ -18,13 +18,8 @@ from unittest.mock import AsyncMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-import yaml
-from homeassistant import config_entries
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.data_entry_flow import FlowResultType, InvalidData
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.selector import SelectSelector
 from pytest_homeassistant_custom_component.common import MockConfigEntry
+import yaml
 
 from custom_components.irrigation_manager import ai, config_flow
 from custom_components.irrigation_manager.conditions import (
@@ -36,6 +31,11 @@ from custom_components.irrigation_manager.device_condition import CONDITION_TYPE
 from custom_components.irrigation_manager.device_trigger import TRIGGER_TYPES
 from custom_components.irrigation_manager.runner import schedule_from_config
 from custom_components.irrigation_manager.scheduler import Schedule, next_run
+from homeassistant import config_entries
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.selector import SelectSelector
 
 PACKAGE = Path(config_flow.__file__).parent
 STRINGS: dict[str, Any] = json.loads((PACKAGE / "strings.json").read_text())
