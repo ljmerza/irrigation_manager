@@ -8,8 +8,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-import pytest
-
 from irrigation_manager.scheduler import (
     Frequency,
     Occurrence,
@@ -23,6 +21,7 @@ from irrigation_manager.scheduler import (
     scheduled_start,
     total_run_duration,
 )
+import pytest
 
 TZ = ZoneInfo("America/New_York")
 MON, TUE, WED, THU, FRI, SAT, SUN = range(7)

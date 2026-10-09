@@ -8,10 +8,10 @@ its own, and reads the entity state (is_on) to verify every stop.
 """
 from __future__ import annotations
 
-import logging
-import math
 from dataclasses import dataclass
 from datetime import timedelta
+import logging
+import math
 from typing import Any
 
 from homeassistant.const import ATTR_ENTITY_ID, STATE_OFF, STATE_ON, STATE_UNAVAILABLE

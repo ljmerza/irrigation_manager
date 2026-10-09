@@ -8,10 +8,10 @@ don't mix the two in one test module, they are separate module objects.
 from __future__ import annotations
 
 import pytest
-from homeassistant.core import HomeAssistant
-from homeassistant.loader import async_get_integration
 
 from custom_components.irrigation_manager.const import DOMAIN
+from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
 
 @pytest.fixture(autouse=True)

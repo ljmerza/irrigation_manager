@@ -7,18 +7,12 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-import voluptuous as vol
-from homeassistant.components.device_automation import DeviceAutomationType
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant, ServiceCall
-from homeassistant.helpers import device_registry as dr
-from homeassistant.setup import async_setup_component
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_get_device_automations,
     async_mock_service,
 )
+import voluptuous as vol
 
 from custom_components.irrigation_manager.const import DOMAIN
 from custom_components.irrigation_manager.device_condition import (
@@ -26,6 +20,12 @@ from custom_components.irrigation_manager.device_condition import (
     CONDITION_TYPES,
     async_condition_from_config,
 )
+from homeassistant.components.device_automation import DeviceAutomationType
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.helpers import device_registry as dr
+from homeassistant.setup import async_setup_component
+from homeassistant.util import dt as dt_util
 
 
 @pytest.fixture(autouse=True)

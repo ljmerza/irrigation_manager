@@ -11,12 +11,6 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from homeassistant.components.recorder.db_schema import StatisticsShortTerm
-from homeassistant.components.recorder.statistics import async_import_statistics
-from homeassistant.components.recorder import get_instance
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
@@ -71,6 +65,12 @@ from custom_components.irrigation_manager.const import (
     SkipCondition,
     Status,
 )
+from homeassistant.components.recorder import get_instance
+from homeassistant.components.recorder.db_schema import StatisticsShortTerm
+from homeassistant.components.recorder.statistics import async_import_statistics
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util import dt as dt_util
 
 RAIN = SkipCondition.RAIN
 FORECAST = SkipCondition.FORECAST

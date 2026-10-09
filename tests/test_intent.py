@@ -7,13 +7,8 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
-import pytest
 from freezegun.api import FrozenDateTimeFactory
-from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import intent
-from homeassistant.setup import async_setup_component
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.irrigation_manager.const import CONF_ZONES, DOMAIN, Status
@@ -25,6 +20,11 @@ from custom_components.irrigation_manager.intent import (
     async_setup_intents,
 )
 from custom_components.irrigation_manager.scheduler import Occurrence
+from homeassistant.components.homeassistant.exposed_entities import async_expose_entity
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import intent
+from homeassistant.setup import async_setup_component
 
 TZ = ZoneInfo("America/New_York")
 

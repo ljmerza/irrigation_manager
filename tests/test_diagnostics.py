@@ -7,10 +7,6 @@ from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
-from homeassistant.components.diagnostics import REDACTED
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
 
 from custom_components.irrigation_manager.const import (
@@ -25,6 +21,10 @@ from custom_components.irrigation_manager.const import (
 from custom_components.irrigation_manager.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from homeassistant.components.diagnostics import REDACTED
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 ZONE_PLAIN = "valve.zone_a"
 ZONE_BHYVE = "valve.garden_irrigation_zone"

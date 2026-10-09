@@ -10,15 +10,15 @@ from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.config_entries import ConfigEntryState
-from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.irrigation_manager import websocket_api as im_websocket
 from custom_components.irrigation_manager.const import DOMAIN, SIGNAL_SCHEDULES_CHANGED
 from custom_components.irrigation_manager.runner import ScheduleRunner
+from homeassistant.config_entries import ConfigEntryState
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import async_dispatcher_send
 
 CONFIG: dict[str, Any] = {
     "name": "Front lawn",
