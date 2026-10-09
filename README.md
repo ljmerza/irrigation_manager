@@ -7,6 +7,8 @@
 
 Home Assistant custom integration for scheduled watering of `valve` and `switch` entities. Each schedule has zones, a frequency, a start time, and optional rain, forecast, temperature, wind, occupancy and soil-moisture conditions. A sidebar panel shows every schedule with its controls.
 
+<img src="assets/panel-list.jpg" alt="The Irrigation panel on a phone, listing schedule cards with their status badges (Disabled, Skipped: rain), on/off switches and Run now, Skip next, Check now, Copy and Edit buttons" align="right" width="300">
+
 One config entry = one schedule. Add as many schedules as you want.
 
 ## Features
@@ -276,7 +278,6 @@ An admin-only **Irrigation** entry in the sidebar lists every schedule:
 **Add schedule** and **Edit** open Home Assistant's own setup and options flows. **Copy** on a schedule card opens the same setup menu; pick **Copy an existing schedule** there.
 
 <img src="assets/panel.png" alt="A schedule card in the Irrigation panel, showing next run, rain delay presets, the schedule and zone summaries, conditions, last run, last status and history" width="360">
-<img src="assets/panel-list.jpg" alt="The Irrigation panel on a phone, listing schedule cards with their status badges (Disabled, Skipped: rain), on/off switches and Run now, Skip next, Check now, Copy and Edit buttons" width="360">
 
 ## Migration
 
