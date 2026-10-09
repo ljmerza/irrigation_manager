@@ -2,6 +2,16 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [0.6.0] — 2026-10-09
+
+Lets you pick how long each zone waters on a manual run.
+
+### Changed
+- **Run now** on a schedule card opens a dialog with a minutes field for every zone, prefilled with the schedule's own times. Change any of them and press **Start**; zones you leave alone keep following the schedule.
+
+### Added
+- The `irrigation_manager/run_now` websocket command accepts a `zone_minutes` map (zone entity id to minutes, 1–180) to override individual zones. It can't be combined with `minutes`.
+
 ## [0.5.0] — 2026-10-08
 
 Links each zone to its device.
