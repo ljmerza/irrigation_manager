@@ -2,7 +2,9 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
-## [Unreleased]
+## [0.6.1] — 2026-10-19
+
+Only offers the imports when there is something to import.
 
 ### Changed
 - The setup menu only offers **Import legacy helpers** when one of the legacy helpers exists, and **Import B-Hyve program** when a B-Hyve device has program sensors.
