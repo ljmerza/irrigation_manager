@@ -2,6 +2,12 @@
 
 Notable changes to Irrigation Manager. Versions follow semantic versioning; the release workflow sets `manifest.json`'s version from the release tag.
 
+## [Unreleased]
+
+### Changed
+- The setup menu only offers **Import legacy helpers** when one of the legacy helpers exists, and **Import B-Hyve program** when a B-Hyve device has program sensors.
+- The migration guide no longer lists one install's helper values or its Node-RED steps.
+
 ## [0.6.0] — 2026-10-09
 
 Lets you pick how long each zone waters on a manual run.

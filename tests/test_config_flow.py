@@ -440,13 +440,22 @@ async def test_user_menu_without_ai_task(hass: HomeAssistant) -> None:
     result = await start_flow(hass)
     assert result["type"] is FlowResultType.MENU
     assert result["step_id"] == "user"
-    assert result["menu_options"] == ["create", "import_legacy", "import_bhyve"]
+    assert result["menu_options"] == ["create"]
 
 
 async def test_user_menu_offers_describe_with_ai_task(hass: HomeAssistant) -> None:
     hass.states.async_set(AI_TASK, "unknown")
     result = await start_flow(hass)
-    assert result["menu_options"] == ["create", "import_legacy", "import_bhyve", "describe"]
+    assert result["menu_options"] == ["create", "describe"]
+
+
+async def test_user_menu_offers_imports_when_sources_exist(hass: HomeAssistant) -> None:
+    with (
+        patch(READ_LEGACY, return_value=deepcopy(LEGACY)),
+        patch(READ_BHYVE, return_value=[deepcopy(BHYVE_UNSUPPORTED)]),
+    ):
+        result = await start_flow(hass)
+    assert result["menu_options"] == ["create", "import_legacy", "import_bhyve"]
 
 
 async def test_interval_fixed_time_single_zone(hass: HomeAssistant) -> None:
@@ -1256,7 +1265,14 @@ async def test_import_legacy_threshold_not_stored_without_rain(hass: HomeAssista
 
 
 async def test_import_legacy_nothing_found_aborts(hass: HomeAssistant) -> None:
-    empty = {"config": {}, "zone_minutes": None, "candidates": [], "notes": ["none"], "found": []}
+    # A helper exists, so the menu offers the import, but none of them hold a schedule.
+    empty = {
+        "config": {},
+        "zone_minutes": None,
+        "candidates": [],
+        "notes": ["none"],
+        "found": ["input_boolean.drip_irrigation"],
+    }
     with patch(READ_LEGACY, return_value=empty):
         result = await menu(hass, await start_flow(hass), "import_legacy")
     assert result["type"] is FlowResultType.ABORT
@@ -1421,7 +1437,7 @@ async def test_describe_error_shown_on_form(hass: HomeAssistant) -> None:
 async def test_user_menu_offers_copy_with_a_schedule(hass: HomeAssistant) -> None:
     await setup_entry(hass, title="Front lawn", data=V02_CONFIG)
     result = await start_flow(hass)
-    assert result["menu_options"] == ["create", "copy", "import_legacy", "import_bhyve"]
+    assert result["menu_options"] == ["create", "copy"]
 
 
 async def test_copy_prefills_every_step(hass: HomeAssistant) -> None:

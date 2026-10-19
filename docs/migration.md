@@ -4,12 +4,12 @@ Irrigation Manager can pre-fill new schedules from two existing sources: the leg
 
 ## Legacy helpers
 
-Values below were read from this install on 2026-09-13.
+The setup menu offers **Import legacy helpers** only when at least one of these helpers exists. They come from an earlier helper-and-automation watering setup. If you never had it, the option doesn't appear.
 
-| Helper | Value | Imported as |
+| Helper | Example value | Imported as |
 |---|---|---|
 | `input_text.drip_irrigation_schedule` | `06:00 2d 30m` | Schedule "Drip irrigation": every 2 days at 06:00, 30 min per zone |
-| `input_datetime.drip_irrigation_last_run` | `2026-09-13 06:00:09` | First run date (the every-2-days cadence continues from the last run) |
+| `input_datetime.drip_irrigation_last_run` | `2026-09-13 06:00:09` | First run date (the every-N-days cadence continues from the last run) |
 | `input_boolean.drip_irrigation` | `off` | Not imported; the wizard warns if it's on (both would water) |
 | `input_number.rain_threshold` | `0.1` | Rain threshold (you still pick the rain sensor) |
 | `input_number.last_rain_interval` ("Grass Watering Interval") | `5` | Optional "Grass watering" schedule: every 5 days |
@@ -19,15 +19,17 @@ Schedule string format: a start time `HH:MM`, an interval `<N>d` (1–31) and a 
 
 What the helpers can't tell, so you choose it in the wizard:
 
-- **Zones.** No helper records which valves the drip automation opened.
+- **Zones.** No helper records which valves the old automation opened.
 - **Rain sensor** for the imported threshold.
-- **Grass schedule start time, zones and rain sensor.** The grass schedule is an approximation: the old automation appears to water N days after the last rain (unverified — its Node-RED flow wasn't inspected), while an every-N-days schedule keeps its cadence when it rains.
+- **Grass schedule start time, zones and rain sensor.** The grass schedule is an approximation: an every-N-days schedule keeps its cadence when it rains, while the old setup appears to water N days after the last rain (unverified).
 
 Not imported (no schedule equivalent): `input_boolean.grass_watering_sprinkler_automation`, `input_boolean.moisture_automation`, `input_text.setup_irrigation_date`, `input_boolean.setup_irrigation_chore`.
 
-The drip helpers aren't in the entity registry (they're YAML helpers), so they're read from their current states. If a helper is unavailable at import time it's reported as not found.
+Helpers are read from their current states, so YAML helpers that aren't in the entity registry are found too. A helper that is unavailable at import time is reported as not found.
 
 ## B-Hyve on-device programs
+
+The setup menu offers **Import B-Hyve program** only when an orbit_bhyve device has program sensors.
 
 Source: the orbit_bhyve "Program A–D" sensors, e.g. `sensor.garden_irrigation_program_a`. State is `enabled`, `disabled` or `empty`; attributes are `name`, `days`, `start_times` (`HH:MM`), `zones` (`[{zone, minutes}]`, zone 1-indexed) and `budget` (%). Programs load on the device's idle poll, so a sensor with no reading yet is reported, not imported.
 
@@ -49,17 +51,13 @@ Imported zones run sequentially (unverified: assumes the device runs a program's
 
 **Turn the device program off after importing**, or the device and Irrigation Manager will both water. The wizard can do it for you (it turns off the program's `switch.<device>_program_<x>` switch) only after you confirm. You can also do it from the device page.
 
-## Retiring the Node-RED flows
+## Retiring the old automations
 
-The old helpers are probably driven by Node-RED — none of them appear in `automations.yaml`. Node-RED flows in this repo are read and changed only through the `nodered` MCP server (never by editing `flows.json`). The import tool doesn't have that access, so no flow ids are listed here. Checklist:
+Whatever drove the old setup (automations, scripts or Node-RED flows) keeps running until you turn it off. Switch over in this order so nothing waters twice and nothing is lost:
 
-1. Through the `nodered` MCP server, find the flows that reference any of: `input_text.drip_irrigation_schedule`, `input_datetime.drip_irrigation_last_run`, `input_boolean.drip_irrigation`, `input_number.rain_threshold`, `input_number.last_rain_interval`, `input_text.last_rain`, `input_boolean.grass_watering_sprinkler_automation`, and any flow that calls a service on the zone valves you imported.
+1. Find the automations or flows that use the helpers above, and any that call a service on the zone valves you imported.
 2. Create the new schedules (import or wizard) and leave them enabled.
-3. Disable those flows through the MCP server. Don't delete them yet.
-4. Turn off `input_boolean.drip_irrigation` and `input_boolean.grass_watering_sprinkler_automation`.
+3. Disable the old automations or flows. Don't delete them yet.
+4. Turn off `input_boolean.drip_irrigation` and `input_boolean.grass_watering_sprinkler_automation` if you have them.
 5. Let at least one full cycle run (for an every-2-days schedule, two days). Check the schedule's status and last run in the Irrigation panel, and that nothing else opened the valves.
-6. Delete the disabled flows through the MCP server, then remove the helpers from YAML.
-
-## simple_irrigation and never_dry
-
-Both integrations are gone from `custom_components`. Checked on 2026-09-13: no config entries, no entities and no `.storage` files belong to either, so there is nothing to import.
+6. Delete the disabled automations or flows, then remove the helpers.

@@ -4,7 +4,8 @@ One config entry per schedule. Both flows walk the same steps — zones, run
 time, frequency, start time, conditions, AI reports, run notifications — through
 ScheduleFlowMixin. The config flow starts with a menu: create manually, copy an
 existing schedule, import the legacy helpers, import a B-Hyve program, or
-describe the schedule to an AI task. Copies, imports and descriptions only fill
+describe the schedule to an AI task; copy, the imports and describe are only
+offered when their source exists. Copies, imports and descriptions only fill
 in defaults; every value still goes
 through the normal steps, and nothing is saved until the flow finishes.
 
@@ -1246,7 +1247,11 @@ class IrrigationManagerConfigFlow(ScheduleFlowMixin, ConfigFlow, domain=DOMAIN):
         options = ["create"]
         if self.hass.config_entries.async_entries(DOMAIN):
             options.append("copy")
-        options += ["import_legacy", "import_bhyve"]
+        # Imports are only offered when their source exists on this install.
+        if migration.async_read_legacy_helpers(self.hass)["found"]:
+            options.append("import_legacy")
+        if migration.async_read_bhyve_programs(self.hass):
+            options.append("import_bhyve")
         if self.hass.states.async_entity_ids(AI_TASK_DOMAIN):
             options.append("describe")
         return self.async_show_menu(step_id="user", menu_options=options)

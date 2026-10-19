@@ -74,8 +74,8 @@ Docker bind mount example:
 |---|---|
 | **Create manually** | Goes through the setup steps below. |
 | **Copy an existing schedule** | Shown when a schedule exists. Pick one and every step is pre-filled from it, zones included; the name defaults to `<name> (copy)`. Change anything before saving. |
-| **Import legacy helpers** | Reads the old watering helpers (`input_text.drip_irrigation_schedule` such as `06:00 2d 30m`, `input_number.rain_threshold`, `input_datetime.drip_irrigation_last_run` and related helpers) and pre-fills the steps. You still choose the zones. See [docs/migration.md](docs/migration.md). |
-| **Import B-Hyve program** | Lists the programs on B-Hyve devices (`sensor.*_program_a`–`_d`) and pre-fills a schedule from one. Odd/even-day and one-time programs can't be imported. The last step has a **Turn off this program on the device** checkbox, off by default; the device's program switch is only turned off when you tick it. |
+| **Import legacy helpers** | Shown when one of the old watering helpers exists. Reads them (`input_text.drip_irrigation_schedule` such as `06:00 2d 30m`, `input_number.rain_threshold`, `input_datetime.drip_irrigation_last_run` and related helpers) and pre-fills the steps. You still choose the zones. See [docs/migration.md](docs/migration.md). |
+| **Import B-Hyve program** | Shown when a B-Hyve device has program sensors. Lists the programs on B-Hyve devices (`sensor.*_program_a`–`_d`) and pre-fills a schedule from one. Odd/even-day and one-time programs can't be imported. The last step has a **Turn off this program on the device** checkbox, off by default; the device's program switch is only turned off when you tick it. |
 | **Describe in words** | Shown when an `ai_task` entity exists. The AI task turns your description into settings that pre-fill the steps. Nothing is saved until you finish the steps; values the setup wouldn't accept are dropped and listed. |
 
 ### Setup steps
@@ -281,7 +281,7 @@ An admin-only **Irrigation** entry in the sidebar lists every schedule:
 
 ## Migration
 
-Importing the legacy watering helpers and B-Hyve programs, and retiring the old Node-RED flows: [docs/migration.md](docs/migration.md).
+Importing the legacy watering helpers and B-Hyve programs, and retiring the automations they replace: [docs/migration.md](docs/migration.md).
 
 ## Limits
 
